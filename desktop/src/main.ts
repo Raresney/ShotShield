@@ -1,22 +1,36 @@
-import { invoke } from "@tauri-apps/api/core";
+import { scan, type Detection } from "@shotshield/core";
 
-let greetInputEl: HTMLInputElement | null;
-let greetMsgEl: HTMLElement | null;
+const input = document.querySelector<HTMLTextAreaElement>("#input")!;
+const summary = document.querySelector<HTMLParagraphElement>("#summary")!;
+const results = document.querySelector<HTMLDivElement>("#results")!;
 
-async function greet() {
-  if (greetMsgEl && greetInputEl) {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsgEl.textContent = await invoke("greet", {
-      name: greetInputEl.value,
-    });
-  }
+function row(d: Detection): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "hit";
+
+  const dot = document.createElement("span");
+  dot.className = `sev sev-${d.severity}`;
+  dot.title = d.severity;
+
+  const label = document.createElement("span");
+  label.className = "label";
+  label.textContent = d.label;
+
+  const match = document.createElement("code");
+  match.className = "match";
+  match.textContent = d.text; // textContent, never innerHTML — this is untrusted
+
+  el.append(dot, label, match);
+  return el;
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  greetInputEl = document.querySelector("#greet-input");
-  greetMsgEl = document.querySelector("#greet-msg");
-  document.querySelector("#greet-form")?.addEventListener("submit", (e) => {
-    e.preventDefault();
-    greet();
-  });
-});
+function render(): void {
+  const dets = scan(input.value);
+  results.replaceChildren(...dets.map(row));
+
+  if (!input.value.trim()) summary.textContent = "";
+  else if (dets.length === 0) summary.textContent = "Nothing sensitive found.";
+  else summary.textContent = `${dets.length} found`;
+}
+
+input.addEventListener("input", render);

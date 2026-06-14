@@ -1,7 +1,18 @@
-# Tauri + Vanilla TS
+# ShotShield — desktop
 
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Typescript.
+Tauri v2 + Vite (vanilla TS) shell around [`@shotshield/core`](../core).
 
-## Recommended IDE Setup
+Right now it scans pasted text. Screenshot capture, OCR and the redaction
+canvas come next.
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## Develop
+
+From the repo root:
+
+```sh
+npm install
+npm run tauri dev --workspace desktop
+```
+
+Needs the [Tauri prerequisites](https://tauri.app/start/prerequisites/) (Rust +
+a C/C++ toolchain; WebView2 ships with Windows).

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "desktop",
+  "productName": "ShotShield",
   "version": "0.1.0",
   "identifier": "com.shotshield.app",
   "build": {
@@ -13,9 +13,11 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "desktop",
-        "width": 800,
-        "height": 600
+        "title": "ShotShield",
+        "width": 960,
+        "height": 720,
+        "minWidth": 640,
+        "minHeight": 480
       }
     ],
     "security": {
