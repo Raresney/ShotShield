@@ -65,3 +65,33 @@ test("detects a JWT", () => {
 test("does not treat a plain dotted string as a JWT", () => {
   assert.deepEqual(scan("see config.local.json"), []);
 });
+
+test("detects credit cards and labels the brand", () => {
+  const visa = scan("paid with 4111 1111 1111 1111 yesterday");
+  assert.equal(visa.length, 1);
+  assert.equal(visa[0]!.category, "credit_card");
+  assert.equal(visa[0]!.label, "Visa card");
+
+  const mc = scan("card 5555555555554444");
+  assert.equal(mc[0]!.label, "Mastercard");
+});
+
+test("does not flag a long number that fails Luhn", () => {
+  assert.deepEqual(scan("order 1234 5678 9012 3456"), []);
+});
+
+test("detects a valid IBAN", () => {
+  const dets = scan("send it to DE89 3704 0044 0532 0130 00 please");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "iban");
+});
+
+test("ignores an IBAN-shaped string with a bad checksum", () => {
+  assert.deepEqual(scan("ref DE00 3704 0044 0532 0130 00"), []);
+});
+
+test("detects a Romanian CNP", () => {
+  const dets = scan("CNP 1960209025813 pe buletin");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+});
