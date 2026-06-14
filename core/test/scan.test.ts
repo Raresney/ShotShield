@@ -30,3 +30,38 @@ test("supports user-defined custom rules", () => {
   assert.equal(dets[0]!.category, "custom");
   assert.equal(dets[0]!.label, "ACME ticket");
 });
+
+test("detects common API keys and tokens", () => {
+  const keys = [
+    "ghp_1A2b3C4d5E6f7G8h9I0jK1lM2nO3pQ4rS5tU",
+    "sk-abcDEF1234567890ghijKLMN",
+    "AKIAIOSFODNN7EXAMPLE",
+    // Split so GitHub's push protection doesn't flag our own test fixture.
+    "xoxb-" + "12345678901-abcdEFGHijklMNOP",
+  ];
+  for (const key of keys) {
+    const dets = scan(`token = ${key}`);
+    assert.equal(dets.length, 1, key);
+    assert.equal(dets[0]!.category, "api_key", key);
+    assert.equal(dets[0]!.text, key, key);
+  }
+});
+
+test("does not flag an sk- prefix that is too short to be a key", () => {
+  assert.deepEqual(scan("the sk-foo helper"), []);
+});
+
+test("detects a JWT", () => {
+  const jwt =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" +
+    ".eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0" +
+    ".SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+  const dets = scan(`Authorization: Bearer ${jwt}`);
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "jwt");
+  assert.equal(dets[0]!.text, jwt);
+});
+
+test("does not treat a plain dotted string as a JWT", () => {
+  assert.deepEqual(scan("see config.local.json"), []);
+});
