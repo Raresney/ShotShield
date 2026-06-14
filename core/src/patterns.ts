@@ -16,4 +16,12 @@ export interface PatternSpec {
   refine?: (raw: string) => false | { label?: string; confidence?: number };
 }
 
-export const BUILTIN_PATTERNS: PatternSpec[] = [];
+export const BUILTIN_PATTERNS: PatternSpec[] = [
+  {
+    category: "email",
+    label: "Email address",
+    severity: "medium",
+    source: "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,24}",
+    baseConfidence: 0.9,
+  },
+];
