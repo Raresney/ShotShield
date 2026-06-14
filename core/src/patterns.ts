@@ -38,6 +38,12 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   { category: "api_key", label: "Private key block", severity: "critical",
     source: "-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----", baseConfidence: 0.99 },
 
+  // ── JWT ─────────────────────────────────────────────────────────────────
+  // header.payload.signature, each base64url. The leading eyJ ({" in base64)
+  // is what keeps this from matching arbitrary dotted strings.
+  { category: "jwt", label: "JSON Web Token", severity: "high",
+    source: "eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}", baseConfidence: 0.92 },
+
   // ── Email ─────────────────────────────────────────────────────────────────
   { category: "email", label: "Email address", severity: "medium",
     source: "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,24}", baseConfidence: 0.9 },

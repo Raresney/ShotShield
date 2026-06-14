@@ -50,3 +50,18 @@ test("detects common API keys and tokens", () => {
 test("does not flag an sk- prefix that is too short to be a key", () => {
   assert.deepEqual(scan("the sk-foo helper"), []);
 });
+
+test("detects a JWT", () => {
+  const jwt =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" +
+    ".eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0" +
+    ".SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+  const dets = scan(`Authorization: Bearer ${jwt}`);
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "jwt");
+  assert.equal(dets[0]!.text, jwt);
+});
+
+test("does not treat a plain dotted string as a JWT", () => {
+  assert.deepEqual(scan("see config.local.json"), []);
+});
