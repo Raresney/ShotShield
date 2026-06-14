@@ -126,3 +126,123 @@ textarea:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Image stage ── */
+.stage {
+  position: relative;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.stage:hover,
+.stage:focus-visible {
+  border-color: var(--low);
+  outline: none;
+}
+.stage.dragover {
+  border-color: var(--low);
+  background: color-mix(in srgb, var(--low) 8%, var(--surface));
+}
+.stage.has-image {
+  cursor: default;
+  padding: 8px;
+  border-style: solid;
+}
+
+.stage-prompt {
+  padding: 32px 24px;
+  text-align: center;
+  pointer-events: none;
+}
+.stage-hint {
+  margin: 0;
+  font-size: 14px;
+}
+.stage-hint .link {
+  color: var(--low);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.stage-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.stage-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.btn {
+  appearance: none;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: var(--muted);
+}
+
+.fallback {
+  margin-top: 14px;
+}
+.fallback > summary {
+  width: max-content;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.fallback > summary:hover {
+  color: var(--fg);
+}
+.fallback textarea {
+  margin-top: 10px;
+}
+
+/* ── Toggleable finding (image mode) ── */
+.hit-toggle {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.hit-toggle:hover {
+  border-color: var(--muted);
+}
+
+.pill {
+  flex: none;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--code);
+  color: var(--muted);
+  font-size: 11px;
+}
+.hit-toggle[aria-pressed="true"] .pill {
+  background: var(--fg);
+  color: var(--bg);
+}
