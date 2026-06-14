@@ -219,3 +219,30 @@ textarea:focus {
 .fallback textarea {
   margin-top: 10px;
 }
+
+/* ── Toggleable finding (image mode) ── */
+.hit-toggle {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.hit-toggle:hover {
+  border-color: var(--muted);
+}
+
+.pill {
+  flex: none;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--code);
+  color: var(--muted);
+  font-size: 11px;
+}
+.hit-toggle[aria-pressed="true"] .pill {
+  background: var(--fg);
+  color: var(--bg);
+}
