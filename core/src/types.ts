@@ -1,7 +1,7 @@
 // Core domain types for the detection engine. Pure types — erased at run time.
 // The Category union grows as detectors are added.
 
-export type Category = "api_key" | "jwt" | "email" | "custom";
+export type Category = "api_key" | "jwt" | "credit_card" | "email" | "custom";
 
 export type Severity = "critical" | "high" | "medium" | "low";
 

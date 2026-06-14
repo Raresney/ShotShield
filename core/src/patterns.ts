@@ -2,6 +2,7 @@
 // validates a raw match. Adding a detector means adding a row here.
 
 import type { Category, Severity } from "./types.ts";
+import { luhn } from "./validators.ts";
 
 export interface PatternSpec {
   category: Category;
@@ -14,6 +15,16 @@ export interface PatternSpec {
   baseConfidence: number;
   /** Return false to reject a match, or an object to accept it (with overrides). */
   refine?: (raw: string) => false | { label?: string; confidence?: number };
+}
+
+const digitsOnly = (s: string): string => s.replace(/\D/g, "");
+
+function cardBrand(d: string): string {
+  if (/^4\d{12,18}$/.test(d)) return "Visa card";
+  if (/^(5[1-5]\d{14}|2(22[1-9]|2[3-9]\d|[3-6]\d\d|7[01]\d|720)\d{12})$/.test(d)) return "Mastercard";
+  if (/^3[47]\d{13}$/.test(d)) return "Amex card";
+  if (/^(6011\d{12}|65\d{14}|64[4-9]\d{13})$/.test(d)) return "Discover card";
+  return "Payment card";
 }
 
 export const BUILTIN_PATTERNS: PatternSpec[] = [
@@ -43,6 +54,17 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // is what keeps this from matching arbitrary dotted strings.
   { category: "jwt", label: "JSON Web Token", severity: "high",
     source: "eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}", baseConfidence: 0.92 },
+
+  // ── Payment cards ─────────────────────────────────────────────────────────
+  // Loose digit-run match (spaces/dashes allowed), then Luhn decides. Brand is
+  // a nicer label than a bare "card number".
+  { category: "credit_card", label: "Payment card", severity: "critical",
+    source: "(?:\\d[ -]?){12,18}\\d", baseConfidence: 0.5,
+    refine: (raw) => {
+      const d = digitsOnly(raw);
+      if (d.length < 13 || d.length > 19 || !luhn(d)) return false;
+      return { confidence: 0.97, label: cardBrand(d) };
+    } },
 
   // ── Email ─────────────────────────────────────────────────────────────────
   { category: "email", label: "Email address", severity: "medium",

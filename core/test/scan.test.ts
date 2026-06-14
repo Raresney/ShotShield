@@ -65,3 +65,17 @@ test("detects a JWT", () => {
 test("does not treat a plain dotted string as a JWT", () => {
   assert.deepEqual(scan("see config.local.json"), []);
 });
+
+test("detects credit cards and labels the brand", () => {
+  const visa = scan("paid with 4111 1111 1111 1111 yesterday");
+  assert.equal(visa.length, 1);
+  assert.equal(visa[0]!.category, "credit_card");
+  assert.equal(visa[0]!.label, "Visa card");
+
+  const mc = scan("card 5555555555554444");
+  assert.equal(mc[0]!.label, "Mastercard");
+});
+
+test("does not flag a long number that fails Luhn", () => {
+  assert.deepEqual(scan("order 1234 5678 9012 3456"), []);
+});
