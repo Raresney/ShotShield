@@ -14,6 +14,12 @@ dist-ssr/
 /desktop/src-tauri/target/
 /desktop/src-tauri/gen/
 
+# ───── Tesseract OCR runtime (desktop) ─────
+# Worker + wasm core are copied from node_modules on predev/prebuild.
+# Only the language model is committed — it isn't an npm package.
+/desktop/public/vendor/tesseract/*
+!/desktop/public/vendor/tesseract/lang/
+
 # ───── Flutter (mobile) ─────
 .dart_tool/
 .flutter-plugins
