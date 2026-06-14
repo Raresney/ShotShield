@@ -79,3 +79,13 @@ test("detects credit cards and labels the brand", () => {
 test("does not flag a long number that fails Luhn", () => {
   assert.deepEqual(scan("order 1234 5678 9012 3456"), []);
 });
+
+test("detects a valid IBAN", () => {
+  const dets = scan("send it to DE89 3704 0044 0532 0130 00 please");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "iban");
+});
+
+test("ignores an IBAN-shaped string with a bad checksum", () => {
+  assert.deepEqual(scan("ref DE00 3704 0044 0532 0130 00"), []);
+});

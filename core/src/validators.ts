@@ -17,3 +17,19 @@ export function luhn(digits: string): boolean {
   }
   return sum % 10 === 0;
 }
+
+/** IBAN mod-97 checksum (ISO 13616). Expects the IBAN with spaces removed. */
+export function ibanValid(iban: string): boolean {
+  const s = iban.toUpperCase();
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(s)) return false;
+  // Move the first four chars to the end, then reduce the whole thing mod 97
+  // digit by digit (letters expand to two digits: A=10 … Z=35).
+  const rearranged = s.slice(4) + s.slice(0, 4);
+  let rem = 0;
+  for (let i = 0; i < rearranged.length; i++) {
+    const c = rearranged.charCodeAt(i);
+    const v = c >= 65 ? c - 55 : c - 48;
+    rem = v > 9 ? (rem * 100 + v) % 97 : (rem * 10 + v) % 97;
+  }
+  return rem === 1;
+}

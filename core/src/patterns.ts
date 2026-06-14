@@ -2,7 +2,7 @@
 // validates a raw match. Adding a detector means adding a row here.
 
 import type { Category, Severity } from "./types.ts";
-import { luhn } from "./validators.ts";
+import { luhn, ibanValid } from "./validators.ts";
 
 export interface PatternSpec {
   category: Category;
@@ -65,6 +65,11 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
       if (d.length < 13 || d.length > 19 || !luhn(d)) return false;
       return { confidence: 0.97, label: cardBrand(d) };
     } },
+
+  // ── IBAN ──────────────────────────────────────────────────────────────────
+  { category: "iban", label: "IBAN", severity: "high",
+    source: "[A-Z]{2}\\d{2}(?:[ ]?[A-Z0-9]){11,30}", baseConfidence: 0.7,
+    refine: (raw) => (ibanValid(raw.replace(/\s/g, "")) ? { confidence: 0.98 } : false) },
 
   // ── Email ─────────────────────────────────────────────────────────────────
   { category: "email", label: "Email address", severity: "medium",
