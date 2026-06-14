@@ -30,3 +30,23 @@ test("supports user-defined custom rules", () => {
   assert.equal(dets[0]!.category, "custom");
   assert.equal(dets[0]!.label, "ACME ticket");
 });
+
+test("detects common API keys and tokens", () => {
+  const keys = [
+    "ghp_1A2b3C4d5E6f7G8h9I0jK1lM2nO3pQ4rS5tU",
+    "sk-abcDEF1234567890ghijKLMN",
+    "AKIAIOSFODNN7EXAMPLE",
+    // Split so GitHub's push protection doesn't flag our own test fixture.
+    "xoxb-" + "12345678901-abcdEFGHijklMNOP",
+  ];
+  for (const key of keys) {
+    const dets = scan(`token = ${key}`);
+    assert.equal(dets.length, 1, key);
+    assert.equal(dets[0]!.category, "api_key", key);
+    assert.equal(dets[0]!.text, key, key);
+  }
+});
+
+test("does not flag an sk- prefix that is too short to be a key", () => {
+  assert.deepEqual(scan("the sk-foo helper"), []);
+});
