@@ -1,0 +1,128 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --surface: #f9fafb;
+  --code: #f3f4f6;
+  --crit: #dc2626;
+  --high: #ea580c;
+  --med: #ca8a04;
+  --low: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115;
+    --fg: #e6e7ea;
+    --muted: #9ca3af;
+    --border: #262b33;
+    --surface: #161a21;
+    --code: #1b2027;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+header {
+  margin-bottom: 20px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+}
+
+.tagline {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+textarea {
+  width: 100%;
+  min-height: 160px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--fg);
+  font: 13px/1.5 ui-monospace, "Cascadia Code", Menlo, monospace;
+  resize: vertical;
+}
+
+textarea:focus {
+  outline: 2px solid var(--low);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.summary {
+  margin: 14px 2px 8px;
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.sev {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.sev-critical { background: var(--crit); }
+.sev-high { background: var(--high); }
+.sev-medium { background: var(--med); }
+.sev-low { background: var(--low); }
+
+.label {
+  flex: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.match {
+  margin-left: auto;
+  max-width: 55%;
+  overflow: hidden;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: var(--code);
+  color: var(--muted);
+  font: 12px/1 ui-monospace, Menlo, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

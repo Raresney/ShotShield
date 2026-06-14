@@ -1,8 +1,9 @@
-# ───── Rust (core) ─────
-/core/target/
+# ───── Rust ─────
 **/target/
-Cargo.lock
 *.pdb
+# The desktop app commits its lockfile for reproducible builds; ignore others.
+Cargo.lock
+!/desktop/src-tauri/Cargo.lock
 
 # ───── Node / Tauri (desktop) ─────
 node_modules/

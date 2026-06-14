@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <title>ShotShield</title>
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+
+  <body>
+    <main>
+      <header>
+        <h1>ShotShield</h1>
+        <p class="tagline">Find sensitive data before you share it.</p>
+      </header>
+
+      <textarea
+        id="input"
+        spellcheck="false"
+        placeholder="Paste text to scan — an .env file, a log, a config…"
+      ></textarea>
+
+      <p id="summary" class="summary"></p>
+      <div id="results" class="results"></div>
+    </main>
+  </body>
+</html>
