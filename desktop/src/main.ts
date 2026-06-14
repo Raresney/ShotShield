@@ -1,9 +1,15 @@
 import { scan, type Detection } from "@shotshield/core";
 
+const stage = document.querySelector<HTMLDivElement>("#stage")!;
+const stagePrompt = document.querySelector<HTMLDivElement>("#stagePrompt")!;
+const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
+const fileInput = document.querySelector<HTMLInputElement>("#file")!;
+const clearBtn = document.querySelector<HTMLButtonElement>("#clear")!;
 const input = document.querySelector<HTMLTextAreaElement>("#input")!;
 const summary = document.querySelector<HTMLParagraphElement>("#summary")!;
 const results = document.querySelector<HTMLDivElement>("#results")!;
 
+// ── Findings list (shared by the text and image paths) ──
 function row(d: Detection): HTMLElement {
   const el = document.createElement("div");
   el.className = "hit";
@@ -24,13 +30,83 @@ function row(d: Detection): HTMLElement {
   return el;
 }
 
-function render(): void {
-  const dets = scan(input.value);
+function renderList(dets: Detection[], emptyHint: string): void {
   results.replaceChildren(...dets.map(row));
-
-  if (!input.value.trim()) summary.textContent = "";
-  else if (dets.length === 0) summary.textContent = "Nothing sensitive found.";
+  if (dets.length === 0) summary.textContent = emptyHint;
   else summary.textContent = `${dets.length} found`;
 }
 
-input.addEventListener("input", render);
+// ── Text path ──
+function scanText(): void {
+  if (!input.value.trim()) {
+    summary.textContent = "";
+    results.replaceChildren();
+    return;
+  }
+  renderList(scan(input.value), "Nothing sensitive found.");
+}
+
+input.addEventListener("input", scanText);
+
+// ── Image path ──
+function showImage(img: HTMLImageElement): void {
+  const ctx = canvas.getContext("2d")!;
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  ctx.drawImage(img, 0, 0);
+  canvas.hidden = false;
+  stagePrompt.hidden = true;
+  clearBtn.hidden = false;
+  stage.classList.add("has-image");
+}
+
+function loadImage(src: string): void {
+  const img = new Image();
+  img.addEventListener("load", () => showImage(img));
+  img.src = src;
+}
+
+function handleFile(file: File | null | undefined): void {
+  if (!file || !file.type.startsWith("image/")) return;
+  const reader = new FileReader();
+  reader.addEventListener("load", () => loadImage(reader.result as string));
+  reader.readAsDataURL(file);
+}
+
+function clearImage(): void {
+  canvas.hidden = true;
+  stagePrompt.hidden = false;
+  clearBtn.hidden = true;
+  stage.classList.remove("has-image");
+  summary.textContent = "";
+  results.replaceChildren();
+}
+
+const canPick = () => !stage.classList.contains("has-image");
+
+stage.addEventListener("click", () => canPick() && fileInput.click());
+stage.addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && canPick()) {
+    e.preventDefault();
+    fileInput.click();
+  }
+});
+fileInput.addEventListener("change", () => handleFile(fileInput.files?.[0]));
+clearBtn.addEventListener("click", clearImage);
+
+stage.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  stage.classList.add("dragover");
+});
+stage.addEventListener("dragleave", () => stage.classList.remove("dragover"));
+stage.addEventListener("drop", (e) => {
+  e.preventDefault();
+  stage.classList.remove("dragover");
+  handleFile(e.dataTransfer?.files?.[0]);
+});
+
+// Paste an image from the clipboard. Pasting text falls through untouched.
+window.addEventListener("paste", (e) => {
+  const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith("image/"));
+  if (item) handleFile(item.getAsFile());
+});

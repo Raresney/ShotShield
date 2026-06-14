@@ -15,11 +15,28 @@
         <p class="tagline">Find sensitive data before you share it.</p>
       </header>
 
-      <textarea
-        id="input"
-        spellcheck="false"
-        placeholder="Paste text to scan — an .env file, a log, a config…"
-      ></textarea>
+      <div id="stage" class="stage" tabindex="0" role="button"
+           aria-label="Drop, paste, or choose an image to scan">
+        <div id="stagePrompt" class="stage-prompt">
+          <p class="stage-hint">Drop a screenshot, paste, or <span class="link">choose an image</span></p>
+          <p class="stage-sub">ID cards, bank cards, configs — scanned on your device, nothing uploaded.</p>
+        </div>
+        <canvas id="canvas" class="canvas" hidden></canvas>
+        <input id="file" type="file" accept="image/*" hidden />
+      </div>
+
+      <div class="stage-actions">
+        <button id="clear" class="btn" hidden>Clear</button>
+      </div>
+
+      <details class="fallback">
+        <summary>or paste text</summary>
+        <textarea
+          id="input"
+          spellcheck="false"
+          placeholder="Paste text to scan — an .env file, a log, a config…"
+        ></textarea>
+      </details>
 
       <p id="summary" class="summary"></p>
       <div id="results" class="results"></div>
