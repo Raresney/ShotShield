@@ -1,0 +1,54 @@
+# ───── Rust (core) ─────
+/core/target/
+**/target/
+Cargo.lock
+*.pdb
+
+# ───── Node / Tauri (desktop) ─────
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+/desktop/src-tauri/target/
+/desktop/src-tauri/gen/
+
+# ───── Flutter (mobile) ─────
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.pub-cache/
+.pub/
+*.iml
+ios/Pods/
+ios/.symlinks/
+android/.gradle/
+android/local.properties
+*.keystore
+*.jks
+
+# ───── ML models (large, not in git) ─────
+*.onnx
+*.tflite
+/models/
+
+# ───── Secrets / env ─────
+.env
+.env.*
+*.pem
+*.key
+
+# ───── Editors / OS ─────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ───── Misc ─────
+*.log
+/tmp/
+/.cache/
