@@ -186,6 +186,7 @@ textarea:focus {
 .stage-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-top: 8px;
 }
 
@@ -202,6 +203,16 @@ textarea:focus {
 }
 .btn:hover {
   border-color: var(--muted);
+}
+
+.btn-primary {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
+}
+.btn-primary:hover {
+  border-color: var(--fg);
+  opacity: 0.9;
 }
 
 .fallback {

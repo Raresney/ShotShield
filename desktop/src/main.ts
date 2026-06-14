@@ -1,12 +1,14 @@
 import { scan, type Detection } from "@shotshield/core";
 import { ocr } from "./ocr.ts";
 import { locate, paint, type Region } from "./redact.ts";
+import { downloadCanvas } from "./export.ts";
 
 const stage = document.querySelector<HTMLDivElement>("#stage")!;
 const stagePrompt = document.querySelector<HTMLDivElement>("#stagePrompt")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
 const fileInput = document.querySelector<HTMLInputElement>("#file")!;
 const clearBtn = document.querySelector<HTMLButtonElement>("#clear")!;
+const exportBtn = document.querySelector<HTMLButtonElement>("#export")!;
 const input = document.querySelector<HTMLTextAreaElement>("#input")!;
 const summary = document.querySelector<HTMLParagraphElement>("#summary")!;
 const results = document.querySelector<HTMLDivElement>("#results")!;
@@ -80,6 +82,7 @@ async function scanImage(img: HTMLImageElement, token: number): Promise<void> {
   regions = locate(scan(text), words);
   paint(canvas, img, regions);
   renderRegions();
+  exportBtn.hidden = false;
 }
 
 function renderRegions(): void {
@@ -149,6 +152,7 @@ function clearImage(): void {
   canvas.hidden = true;
   stagePrompt.hidden = false;
   clearBtn.hidden = true;
+  exportBtn.hidden = true;
   stage.classList.remove("has-image");
   summary.textContent = "";
   results.replaceChildren();
@@ -165,6 +169,7 @@ stage.addEventListener("keydown", (e) => {
 });
 fileInput.addEventListener("change", () => handleFile(fileInput.files?.[0]));
 clearBtn.addEventListener("click", clearImage);
+exportBtn.addEventListener("click", () => downloadCanvas(canvas, "shotshield-redacted.png"));
 
 stage.addEventListener("dragover", (e) => {
   e.preventDefault();
