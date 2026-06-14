@@ -89,3 +89,9 @@ test("detects a valid IBAN", () => {
 test("ignores an IBAN-shaped string with a bad checksum", () => {
   assert.deepEqual(scan("ref DE00 3704 0044 0532 0130 00"), []);
 });
+
+test("detects a Romanian CNP", () => {
+  const dets = scan("CNP 1960209025813 pe buletin");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+});

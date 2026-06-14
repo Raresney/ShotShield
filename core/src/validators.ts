@@ -33,3 +33,14 @@ export function ibanValid(iban: string): boolean {
   }
   return rem === 1;
 }
+
+/** Romanian CNP control digit: 13 digits, weighted sum mod 11. */
+export function cnpValid(cnp: string): boolean {
+  if (!/^\d{13}$/.test(cnp)) return false;
+  const weights = [2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9];
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += (cnp.charCodeAt(i) - 48) * weights[i]!;
+  let control = sum % 11;
+  if (control === 10) control = 1;
+  return control === cnp.charCodeAt(12) - 48;
+}

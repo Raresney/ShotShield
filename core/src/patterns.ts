@@ -2,7 +2,7 @@
 // validates a raw match. Adding a detector means adding a row here.
 
 import type { Category, Severity } from "./types.ts";
-import { luhn, ibanValid } from "./validators.ts";
+import { luhn, ibanValid, cnpValid } from "./validators.ts";
 
 export interface PatternSpec {
   category: Category;
@@ -70,6 +70,12 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   { category: "iban", label: "IBAN", severity: "high",
     source: "[A-Z]{2}\\d{2}(?:[ ]?[A-Z0-9]){11,30}", baseConfidence: 0.7,
     refine: (raw) => (ibanValid(raw.replace(/\s/g, "")) ? { confidence: 0.98 } : false) },
+
+  // ── National IDs ──────────────────────────────────────────────────────────
+  // Romanian CNP for now; other countries can follow as people ask for them.
+  { category: "national_id", label: "CNP (RO)", severity: "high",
+    source: "[1-9]\\d{12}", baseConfidence: 0.4,
+    refine: (raw) => (cnpValid(raw) ? { confidence: 0.95 } : false) },
 
   // ── Email ─────────────────────────────────────────────────────────────────
   { category: "email", label: "Email address", severity: "medium",
