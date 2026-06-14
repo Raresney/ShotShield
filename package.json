@@ -2,6 +2,9 @@
   "name": "shotshield",
   "version": "0.0.0",
   "private": true,
+  "scripts": {
+    "tauri": "npm run tauri --workspace desktop --"
+  },
   "workspaces": [
     "core",
     "desktop"
