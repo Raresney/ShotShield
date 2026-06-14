@@ -1,4 +1,5 @@
 import { scan, type Detection } from "@shotshield/core";
+import { ocr } from "./ocr.ts";
 
 const stage = document.querySelector<HTMLDivElement>("#stage")!;
 const stagePrompt = document.querySelector<HTMLDivElement>("#stagePrompt")!;
@@ -49,6 +50,9 @@ function scanText(): void {
 input.addEventListener("input", scanText);
 
 // ── Image path ──
+// Bumped on every load/clear so a slow OCR pass can't render stale results.
+let gen = 0;
+
 function showImage(img: HTMLImageElement): void {
   const ctx = canvas.getContext("2d")!;
   canvas.width = img.naturalWidth;
@@ -58,6 +62,17 @@ function showImage(img: HTMLImageElement): void {
   stagePrompt.hidden = true;
   clearBtn.hidden = false;
   stage.classList.add("has-image");
+  void scanImage(img, gen);
+}
+
+async function scanImage(img: HTMLImageElement, token: number): Promise<void> {
+  summary.textContent = "Reading image…";
+  results.replaceChildren();
+  const { text } = await ocr(img, (p) => {
+    if (token === gen) summary.textContent = `Reading image… ${Math.round(p * 100)}%`;
+  });
+  if (token !== gen) return; // a newer image (or a clear) superseded this one
+  renderList(scan(text), "Nothing sensitive found.");
 }
 
 function loadImage(src: string): void {
@@ -68,12 +83,14 @@ function loadImage(src: string): void {
 
 function handleFile(file: File | null | undefined): void {
   if (!file || !file.type.startsWith("image/")) return;
+  gen++;
   const reader = new FileReader();
   reader.addEventListener("load", () => loadImage(reader.result as string));
   reader.readAsDataURL(file);
 }
 
 function clearImage(): void {
+  gen++;
   canvas.hidden = true;
   stagePrompt.hidden = false;
   clearBtn.hidden = true;
