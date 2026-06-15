@@ -11,6 +11,7 @@ const fileInput = document.querySelector<HTMLInputElement>("#file")!;
 const clearBtn = document.querySelector<HTMLButtonElement>("#clear")!;
 const exportBtn = document.querySelector<HTMLButtonElement>("#export")!;
 const rotateBtn = document.querySelector<HTMLButtonElement>("#rotate")!;
+const compareBtn = document.querySelector<HTMLButtonElement>("#compare")!;
 const input = document.querySelector<HTMLTextAreaElement>("#input")!;
 const summary = document.querySelector<HTMLParagraphElement>("#summary")!;
 const results = document.querySelector<HTMLDivElement>("#results")!;
@@ -170,6 +171,9 @@ function renderRegions(): void {
     parts.length > 0
       ? parts.join(" · ")
       : "Nothing sensitive found — drag on the image to redact anything by hand.";
+
+  // Compare only makes sense once something is actually covered.
+  compareBtn.hidden = !(regions.some((r) => r.hidden) || manualBoxes.length > 0);
 }
 
 // A finding row in image mode is a toggle: click to cover/uncover its region.
@@ -237,6 +241,21 @@ function repaint(): void {
 function setHover(boxes: Box[] | null): void {
   hovered = boxes && boxes.length ? boxes : null;
   repaint();
+}
+
+// Hold the Compare button to redraw the image without its redactions — a quick
+// before/after to confirm the boxes cover the right thing. Releasing repaints the
+// redacted view. (A press-and-hold button, not a slider, so it doesn't fight the
+// canvas's drag-to-redact gesture.)
+function peekOriginal(): void {
+  if (currentImg) canvas.getContext("2d")!.drawImage(currentImg, 0, 0);
+}
+compareBtn.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  peekOriginal();
+});
+for (const ev of ["pointerup", "pointerleave", "pointercancel"]) {
+  compareBtn.addEventListener(ev, () => repaint());
 }
 
 // A manual box, listed beside the auto findings. Clicking the row removes it.
@@ -375,6 +394,7 @@ function clearImage(): void {
   stagePrompt.hidden = false;
   clearBtn.hidden = true;
   rotateBtn.hidden = true;
+  compareBtn.hidden = true;
   exportBtn.hidden = true;
   drawHint.hidden = true;
   hideProgress();
