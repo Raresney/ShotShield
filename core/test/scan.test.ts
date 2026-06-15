@@ -228,3 +228,29 @@ test("does not pick a phone out of a longer digit run", () => {
 test("can disable the phone category", () => {
   assert.deepEqual(scan("0712345678", { enabled: { phone: false } }), []);
 });
+
+test("detects a SWIFT/BIC behind its label", () => {
+  assert.equal(scan("BIC: RZBRROBU")[0]?.category, "bic");
+  assert.equal(scan("SWIFT RZBRROBUXXX")[0]?.category, "bic"); // 11-char, with branch
+  assert.equal(scan("Cod SWIFT BTRLRO22")[0]?.category, "bic");
+});
+
+test("does not flag an unlabelled 8-letter token or the Swift language", () => {
+  assert.deepEqual(scan("the DEADBEEF marker"), []);
+  assert.deepEqual(scan("written in Swift recently"), []);
+});
+
+test("detects a CVV behind its label", () => {
+  assert.equal(scan("CVV: 123")[0]?.category, "cvv");
+  assert.equal(scan("CVC 4567")[0]?.category, "cvv");
+});
+
+test("does not flag a CVV label with no number, or a longer run", () => {
+  assert.deepEqual(scan("enter your CVV now"), []);
+  assert.deepEqual(categories("CVV 123456").filter((c) => c === "cvv"), []);
+});
+
+test("can disable the bic and cvv categories", () => {
+  assert.deepEqual(scan("BIC: RZBRROBU", { enabled: { bic: false } }), []);
+  assert.deepEqual(scan("CVV: 123", { enabled: { cvv: false } }), []);
+});
