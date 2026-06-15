@@ -54,6 +54,9 @@ function getWorker() {
       workerPath: "/vendor/tesseract/worker.min.js",
       corePath: "/vendor/tesseract/core",
       langPath: "/vendor/tesseract/lang",
+      // Load the worker from its same-origin path, not a blob: URL, so the CSP
+      // can keep worker-src to 'self'. Every asset is local either way.
+      workerBlobURL: false,
       gzip: false,
       logger: (m) => {
         if (m.status === "recognizing text") onProgress?.(phase, m.progress);
