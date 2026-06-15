@@ -207,6 +207,46 @@ textarea:focus {
   font-size: 12px;
 }
 
+/* Subtle entrance — the image and findings ease in rather than popping. */
+@keyframes ss-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+.stage.has-image .canvas { animation: ss-fade-in 0.2s ease-out; }
+.results .hit { animation: ss-fade-in 0.12s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .stage.has-image .canvas,
+  .results .hit { animation: none; }
+}
+
+/* Thin OCR progress bar along the bottom of the stage. */
+.progress {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--low) 18%, transparent);
+  overflow: hidden;
+}
+.progress[hidden] { display: none; }
+.progress-bar {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--low);
+  transition: width 0.2s ease-out;
+}
+
+/* Confidence, surfaced small and muted on each finding. */
+.conf {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 .stage-actions {
   display: flex;
   justify-content: flex-end;
