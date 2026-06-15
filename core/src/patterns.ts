@@ -78,10 +78,29 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     refine: (raw) => (ibanValid(raw.replace(/\s/g, "")) ? { confidence: 0.98 } : false) },
 
   // ── National IDs ──────────────────────────────────────────────────────────
-  // Romanian CNP for now; other countries can follow as people ask for them.
+  // Two passes for the Romanian CNP. First the strict one: a bare 13-digit run
+  // is only a CNP if its control digit checks out — that keeps random 13-digit
+  // numbers in logs and configs from being flagged.
   { category: "national_id", label: "CNP (RO)", severity: "high",
     source: "[1-9]\\d{12}", baseConfidence: 0.4,
     refine: (raw) => (cnpValid(raw) ? { confidence: 0.95 } : false) },
+
+  // Then the buletin pass: the CNP printed behind a "CNP" label. A phone photo
+  // defeats the strict rule — OCR splits the run with stray spaces and flips the
+  // odd digit (O→0, S→5, B→8…), breaking the control digit so the match is thrown
+  // out. Anchored on the label we undo those confusables, allow the spaces, and
+  // redact a ~13-digit run whether or not the checksum survives: the label carries
+  // the precision, and one misread digit shouldn't leave an ID number in the clear.
+  { category: "national_id", label: "CNP (RO)", severity: "high",
+    source: "(?<=\\bCNP\\b[\\s.:]{0,3})[1-9OoQDIlSBb][\\dOoQDIlSBb ]{10,15}",
+    baseConfidence: 0.85,
+    refine: (raw) => {
+      const d = raw
+        .replace(/[OoQD]/g, "0").replace(/[Il]/g, "1").replace(/S/g, "5").replace(/[Bb]/g, "8")
+        .replace(/\D/g, "");
+      if (d.length < 12 || d.length > 16) return false;
+      return { confidence: d.length === 13 && cnpValid(d) ? 0.97 : 0.85 };
+    } },
 
   // ── ID documents ────────────────────────────────────────────────────────────
   // Machine-readable zone: the `<`-padded block at the bottom of passports and
