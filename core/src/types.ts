@@ -11,6 +11,7 @@ export type Category =
   | "mrz"
   | "name"
   | "email"
+  | "phone"
   | "custom";
 
 export type Severity = "critical" | "high" | "medium" | "low";

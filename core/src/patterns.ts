@@ -143,4 +143,22 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // ── Email ─────────────────────────────────────────────────────────────────
   { category: "email", label: "Email address", severity: "medium",
     source: "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,24}", baseConfidence: 0.9 },
+
+  // ── Phone numbers ───────────────────────────────────────────────────────────
+  // Two precise shapes rather than one greedy run, since phone detection is
+  // false-positive prone. International, explicit "+": a country code then 8–15
+  // digits once separators are stripped.
+  { category: "phone", label: "Phone number", severity: "high",
+    source: "(?<![\\w+])\\+\\d(?:[ .\\-]?\\d){6,14}(?!\\w)", baseConfidence: 0.5,
+    refine: (raw) => {
+      const d = raw.replace(/\D/g, "");
+      return d.length >= 8 && d.length <= 15 ? { confidence: 0.9 } : false;
+    } },
+
+  // Romanian national: 0, then a 2/3/7 service digit, then eight more (10 total),
+  // separators optional. The leading 0 and service digit keep this off ordinary
+  // 10-digit runs like timestamps or order ids.
+  { category: "phone", label: "Phone number", severity: "high",
+    source: "(?<![\\w+])0[237](?:[ .\\-]?\\d){8}(?!\\w)", baseConfidence: 0.6,
+    refine: (raw) => (raw.replace(/\D/g, "").length === 10 ? { confidence: 0.9 } : false) },
 ];
