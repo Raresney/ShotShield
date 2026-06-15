@@ -187,6 +187,25 @@ textarea:focus {
 .canvas[hidden] {
   display: none;
 }
+/* Crosshair signals the image is draggable for manual redaction. */
+.stage.has-image .canvas {
+  cursor: crosshair;
+}
+
+/* Live rectangle shown while dragging out a manual redaction. */
+.draw-box {
+  position: absolute;
+  border: 1.5px dashed var(--low);
+  background: color-mix(in srgb, var(--low) 16%, transparent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.draw-hint {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
 
 .stage-actions {
   display: flex;
