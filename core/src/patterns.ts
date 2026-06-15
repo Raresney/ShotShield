@@ -77,6 +77,23 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     source: "(?<![0-9A-Za-z<])[A-Z]{2}\\d{2}(?:[ ]?[A-Z0-9]){11,30}", baseConfidence: 0.7,
     refine: (raw) => (ibanValid(raw.replace(/\s/g, "")) ? { confidence: 0.98 } : false) },
 
+  // ── SWIFT/BIC ───────────────────────────────────────────────────────────────
+  // A bank identifier is 8 or 11 chars: 4-letter bank, 2-letter country, 2 alnum
+  // location, optional 3 alnum branch. Eight uppercase chars are common in code
+  // (constant names, DEADBEEF), so we anchor on a printed BIC/SWIFT label — the
+  // label carries the precision, the strict shape guards the value. Uppercase-only
+  // on purpose, so the "Swift" language word in a dev screenshot isn't flagged.
+  { category: "bic", label: "SWIFT/BIC", severity: "high",
+    source: "(?<=\\b(?:[Cc]od\\s)?(?:BIC|SWIFT)(?:/(?:BIC|SWIFT))?[\\s:]{0,3})[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?(?![A-Z0-9])",
+    baseConfidence: 0.9 },
+
+  // ── Card security code ───────────────────────────────────────────────────────
+  // A CVV is just 3–4 digits — meaningless on its own. Anchored on the printed
+  // label it's a precise, high-value catch: a CVV beside a card is a real leak.
+  { category: "cvv", label: "Card security code", severity: "high",
+    source: "(?<=\\b(?:CVV2?|CVC2?|CV2|CVN)\\b[\\s:]{0,3})\\d{3,4}(?!\\d)",
+    baseConfidence: 0.85 },
+
   // ── National IDs ──────────────────────────────────────────────────────────
   // Two passes for the Romanian CNP. First the strict one: a bare 13-digit run
   // is only a CNP if its control digit checks out — that keeps random 13-digit

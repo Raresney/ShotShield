@@ -6,6 +6,8 @@ export type Category =
   | "jwt"
   | "credit_card"
   | "iban"
+  | "bic"
+  | "cvv"
   | "national_id"
   | "id_document"
   | "mrz"
