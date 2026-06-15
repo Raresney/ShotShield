@@ -16,6 +16,21 @@ const summary = document.querySelector<HTMLParagraphElement>("#summary")!;
 const results = document.querySelector<HTMLDivElement>("#results")!;
 const drawbox = document.querySelector<HTMLDivElement>("#drawbox")!;
 const drawHint = document.querySelector<HTMLParagraphElement>("#drawHint")!;
+const progress = document.querySelector<HTMLDivElement>("#progress")!;
+const progressBar = document.querySelector<HTMLDivElement>("#progressBar")!;
+
+function showProgress(fraction: number): void {
+  progress.hidden = false;
+  progressBar.style.width = `${Math.round(fraction * 100)}%`;
+}
+function hideProgress(): void {
+  progress.hidden = true;
+  progressBar.style.width = "0%";
+}
+
+// Accent used to outline a finding's region when its row is hovered.
+const accent = getComputedStyle(document.documentElement).getPropertyValue("--low").trim() || "#2563eb";
+let hovered: Box[] | null = null;
 
 // Don't echo full secrets back in the list — show just enough to recognise.
 function mask(s: string): string {
@@ -86,11 +101,13 @@ async function scanImage(
 ): Promise<void> {
   summary.textContent = "Reading image…";
   results.replaceChildren();
+  showProgress(0);
 
   const onProgress: ProgressFn = (phase, fraction) => {
     if (token !== gen) return;
     summary.textContent =
       phase === "orienting" ? "Checking orientation…" : `Reading image… ${Math.round(fraction * 100)}%`;
+    showProgress(fraction);
   };
 
   let text = "";
@@ -116,12 +133,14 @@ async function scanImage(
     }
   } catch (err) {
     if (token !== gen) return;
+    hideProgress();
     console.error("OCR failed", err);
     summary.textContent = `Couldn't read the image: ${err instanceof Error ? err.message : String(err)}`;
     return;
   }
 
   currentImg = working;
+  hideProgress();
   console.log("OCR done:", { chars: text.length, words: words.length });
 
   if (!text.trim()) {
@@ -172,12 +191,19 @@ function regionRow(region: Region, index: number): HTMLElement {
   match.className = "match";
   match.textContent = mask(region.detection.text);
 
+  const conf = document.createElement("span");
+  conf.className = "conf";
+  conf.textContent = `${Math.round(region.detection.confidence * 100)}%`;
+  conf.title = "detection confidence";
+
   const pill = document.createElement("span");
   pill.className = "pill";
   pill.textContent = region.hidden ? "Hidden" : "Visible";
 
-  el.append(dot, label, match, pill);
+  el.append(dot, label, match, conf, pill);
   el.addEventListener("click", () => toggle(index));
+  el.addEventListener("mouseenter", () => setHover(region.boxes));
+  el.addEventListener("mouseleave", () => setHover(null));
   return el;
 }
 
@@ -195,7 +221,22 @@ function toggle(index: number): void {
 // survive the canvas being scaled to fit, and painted onto the canvas itself so
 // the saved PNG carries them.
 function repaint(): void {
-  if (currentImg) paint(canvas, currentImg, regions, manualBoxes);
+  if (!currentImg) return;
+  paint(canvas, currentImg, regions, manualBoxes);
+  if (hovered) {
+    const ctx = canvas.getContext("2d")!;
+    ctx.save();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = Math.max(2, canvas.width * 0.004);
+    for (const b of hovered) ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.restore();
+  }
+}
+
+// Outline a finding's region on the canvas while its row is hovered.
+function setHover(boxes: Box[] | null): void {
+  hovered = boxes && boxes.length ? boxes : null;
+  repaint();
 }
 
 // A manual box, listed beside the auto findings. Clicking the row removes it.
@@ -227,6 +268,8 @@ function manualRow(box: Box, index: number): HTMLElement {
     repaint();
     renderRegions();
   });
+  el.addEventListener("mouseenter", () => setHover([box]));
+  el.addEventListener("mouseleave", () => setHover(null));
   return el;
 }
 
@@ -334,6 +377,8 @@ function clearImage(): void {
   rotateBtn.hidden = true;
   exportBtn.hidden = true;
   drawHint.hidden = true;
+  hideProgress();
+  hovered = null;
   stage.classList.remove("has-image");
   summary.textContent = "";
   results.replaceChildren();
