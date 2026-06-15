@@ -9,6 +9,7 @@ const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
 const fileInput = document.querySelector<HTMLInputElement>("#file")!;
 const clearBtn = document.querySelector<HTMLButtonElement>("#clear")!;
 const exportBtn = document.querySelector<HTMLButtonElement>("#export")!;
+const rotateBtn = document.querySelector<HTMLButtonElement>("#rotate")!;
 const input = document.querySelector<HTMLTextAreaElement>("#input")!;
 const summary = document.querySelector<HTMLParagraphElement>("#summary")!;
 const results = document.querySelector<HTMLDivElement>("#results")!;
@@ -58,15 +59,18 @@ input.addEventListener("input", scanText);
 // Bumped on every load/clear so a slow OCR pass can't render stale results.
 let gen = 0;
 let currentImg: HTMLImageElement | null = null;
+let sourceImg: HTMLImageElement | null = null; // the image as shown (post-rotation), for re-rotating
 let regions: Region[] = [];
 
 function showImage(img: HTMLImageElement): void {
+  sourceImg = img;
   canvas.width = img.naturalWidth;
   canvas.height = img.naturalHeight;
   canvas.getContext("2d")!.drawImage(img, 0, 0);
   canvas.hidden = false;
   stagePrompt.hidden = true;
   clearBtn.hidden = false;
+  rotateBtn.hidden = false;
   stage.classList.add("has-image");
   void scanImage(img, gen);
 }
@@ -74,11 +78,32 @@ function showImage(img: HTMLImageElement): void {
 async function scanImage(img: HTMLImageElement, token: number): Promise<void> {
   summary.textContent = "Reading image…";
   results.replaceChildren();
-  const { text, words } = await ocr(img, (p) => {
-    if (token === gen) summary.textContent = `Reading image… ${Math.round(p * 100)}%`;
-  });
+
+  let result;
+  try {
+    result = await ocr(img, (p) => {
+      if (token === gen) summary.textContent = `Reading image… ${Math.round(p * 100)}%`;
+    });
+  } catch (err) {
+    if (token !== gen) return;
+    console.error("OCR failed", err);
+    summary.textContent = `Couldn't read the image: ${err instanceof Error ? err.message : String(err)}`;
+    return;
+  }
   if (token !== gen) return; // a newer image (or a clear) superseded this one
+
+  const { text, words } = result;
+  console.log("OCR done:", { chars: text.length, words: words.length });
   currentImg = img;
+
+  if (!text.trim()) {
+    regions = [];
+    paint(canvas, img, regions);
+    exportBtn.hidden = false;
+    summary.textContent = "No readable text found — if the photo is sideways, try Rotate.";
+    return;
+  }
+
   regions = locate(scan(text), words);
   paint(canvas, img, regions);
   renderRegions();
@@ -88,7 +113,7 @@ async function scanImage(img: HTMLImageElement, token: number): Promise<void> {
 function renderRegions(): void {
   results.replaceChildren(...regions.map(regionRow));
   if (regions.length === 0) {
-    summary.textContent = "Nothing sensitive found.";
+    summary.textContent = "Nothing sensitive found. If the text looks sideways, try Rotate.";
     return;
   }
   const hidden = regions.filter((r) => r.hidden).length;
@@ -137,6 +162,19 @@ function loadImage(src: string): void {
   img.src = src;
 }
 
+// Rotate the image 90° clockwise onto a new canvas. Re-feeding the result
+// through loadImage re-runs OCR on the rotated frame, so the boxes still line up.
+function rotate90(img: HTMLImageElement): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = img.naturalHeight;
+  c.height = img.naturalWidth;
+  const ctx = c.getContext("2d")!;
+  ctx.translate(c.width, 0);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(img, 0, 0);
+  return c;
+}
+
 function handleFile(file: File | null | undefined): void {
   if (!file || !file.type.startsWith("image/")) return;
   gen++;
@@ -148,10 +186,12 @@ function handleFile(file: File | null | undefined): void {
 function clearImage(): void {
   gen++;
   currentImg = null;
+  sourceImg = null;
   regions = [];
   canvas.hidden = true;
   stagePrompt.hidden = false;
   clearBtn.hidden = true;
+  rotateBtn.hidden = true;
   exportBtn.hidden = true;
   stage.classList.remove("has-image");
   summary.textContent = "";
@@ -170,6 +210,11 @@ stage.addEventListener("keydown", (e) => {
 fileInput.addEventListener("change", () => handleFile(fileInput.files?.[0]));
 clearBtn.addEventListener("click", clearImage);
 exportBtn.addEventListener("click", () => downloadCanvas(canvas, "shotshield-redacted.png"));
+rotateBtn.addEventListener("click", () => {
+  if (!sourceImg) return;
+  gen++;
+  loadImage(rotate90(sourceImg).toDataURL("image/png"));
+});
 
 stage.addEventListener("dragover", (e) => {
   e.preventDefault();
