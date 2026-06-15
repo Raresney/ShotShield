@@ -108,6 +108,19 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     source: "[Ss][Ee][Rr][Ii][Aa]\\s+[A-Z]{2}\\s*(?:[Nn][Rr]\\.?|[Nn]um[ăa]r)?\\s*\\d{6}",
     baseConfidence: 0.9 },
 
+  // ── Name ────────────────────────────────────────────────────────────────────
+  // The holder's name behind a buletin's trilingual Nume/Nom/Last-name labels.
+  // The lookbehind matches the label but keeps it out of the hit, so only the
+  // uppercase value (1–3 words) is boxed. Best-effort: it leans on OCR keeping
+  // the label next to its value. A name with no recognised label needs NER, not
+  // a regex, so it's out of scope.
+  { category: "name", label: "Name", severity: "high",
+    source:
+      "(?<=\\b(?:NUME|Nume|PRENUME|Prenume|NOM|Nom|PR[EÉ]NOM|Pr[eé]nom|LAST NAME|Last name|FIRST NAME|First name|SURNAME|Surname)\\b[\\s:/]{0,3})[A-ZĂÂÎȘȚŞŢ]{2,}(?:[ -][A-ZĂÂÎȘȚŞŢ]{2,}){0,2}",
+    baseConfidence: 0.6,
+    refine: (raw) =>
+      /^(?:NUME|PRENUME|NOM|PR[EÉ]NOM|SURNAME|LAST|FIRST|NAME)$/.test(raw) ? false : { confidence: 0.6 } },
+
   // ── Email ─────────────────────────────────────────────────────────────────
   { category: "email", label: "Email address", severity: "medium",
     source: "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,24}", baseConfidence: 0.9 },

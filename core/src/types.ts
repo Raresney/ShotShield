@@ -9,6 +9,7 @@ export type Category =
   | "national_id"
   | "id_document"
   | "mrz"
+  | "name"
   | "email"
   | "custom";
 
