@@ -34,6 +34,27 @@ export function ibanValid(iban: string): boolean {
   return rem === 1;
 }
 
+/**
+ * Romanian CUI/CIF fiscal code: 2–10 digits (an optional RO prefix is ignored),
+ * last digit is the control. Weights are the 753217532 key, right-aligned to the
+ * body; sum × 10 mod 11, with 10 folding to 0.
+ */
+export function cuiValid(cui: string): boolean {
+  const s = cui.replace(/^RO/i, "");
+  if (!/^\d{2,10}$/.test(s)) return false;
+  const key = [7, 5, 3, 2, 1, 7, 5, 3, 2];
+  const body = s.slice(0, -1);
+  const control = s.charCodeAt(s.length - 1) - 48;
+  let sum = 0;
+  for (let i = 0; i < body.length; i++) {
+    // Align the body's rightmost digit with the key's rightmost weight.
+    sum += (body.charCodeAt(body.length - 1 - i) - 48) * key[key.length - 1 - i]!;
+  }
+  let c = (sum * 10) % 11;
+  if (c === 10) c = 0;
+  return c === control;
+}
+
 /** Romanian CNP control digit: 13 digits, weighted sum mod 11. */
 export function cnpValid(cnp: string): boolean {
   if (!/^\d{13}$/.test(cnp)) return false;

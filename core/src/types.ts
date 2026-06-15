@@ -9,6 +9,7 @@ export type Category =
   | "bic"
   | "cvv"
   | "national_id"
+  | "tax_id"
   | "id_document"
   | "mrz"
   | "name"
