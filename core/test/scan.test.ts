@@ -80,11 +80,13 @@ test("does not flag a long number that fails Luhn", () => {
   assert.deepEqual(scan("order 1234 5678 9012 3456"), []);
 });
 
-test("does not flag a card glued inside an ID machine-readable zone", () => {
-  // The bottom of a Romanian ID is an MRZ: digit runs packed against letters
-  // and `<` fillers. A run there can pass Luhn by chance (4111… is the Visa
-  // test number) but it isn't a card — the boundary lookarounds reject it.
-  assert.deepEqual(scan("IDROU4111111111111111<<<<<<"), []);
+test("reads an ID machine-readable zone as MRZ, not a payment card", () => {
+  // The MRZ packs digit runs against letters and `<` fillers; a run there can
+  // pass Luhn by chance (4111… is the Visa test number) but it isn't a card.
+  // The card detector's lookarounds reject it, and the MRZ detector claims it.
+  const dets = scan("IDROU4111111111111111<<<<<<");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "mrz");
 });
 
 test("still detects a real card surrounded by punctuation", () => {
@@ -124,4 +126,33 @@ test("a Luhn-valid CNP is a national ID, not a payment card", () => {
   const dets = scan("CNP 1800209020157");
   assert.equal(dets.length, 1);
   assert.equal(dets[0]!.category, "national_id");
+});
+
+test("detects the name line of an ID machine-readable zone", () => {
+  // surname<<given-names, padded with `<` — a TD1/TD3 MRZ name line.
+  const dets = scan("POPESCU<<ION<<<<<<<<<<<<<<<<<<");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "mrz");
+});
+
+test("does not treat lowercase code or shift operators as an MRZ", () => {
+  assert.deepEqual(scan("stream << value << endl;"), []);
+  assert.deepEqual(scan("MAX<<2"), []); // all-caps but far too short to be a zone
+});
+
+test("can disable the mrz category", () => {
+  const t = "IDROU123456<<<<<<<<<<<<<<<<<<";
+  assert.equal(scan(t).length, 1);
+  assert.deepEqual(scan(t, { enabled: { mrz: false } }), []);
+});
+
+test("detects a Romanian ID card series and number", () => {
+  const dets = scan("eliberat SERIA RK NR 123456 de SPCLEP");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "id_document");
+  assert.equal(dets[0]!.label, "ID card number (RO)");
+});
+
+test("needs the series label, not any two letters and six digits", () => {
+  assert.deepEqual(scan("order code AB 123456 shipped"), []);
 });
