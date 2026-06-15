@@ -203,3 +203,28 @@ test("does not redact a bare column-header label as a name", () => {
 test("can disable the name category", () => {
   assert.deepEqual(scan("NUME POPESCU", { enabled: { name: false } }), []);
 });
+
+test("detects an international phone number", () => {
+  const d = scan("call me on +40 712 345 678 tomorrow");
+  assert.equal(d.length, 1);
+  assert.equal(d[0]!.category, "phone");
+  assert.equal(d[0]!.text, "+40 712 345 678");
+});
+
+test("detects a Romanian mobile number, spaced or not", () => {
+  assert.equal(scan("tel 0712 345 678")[0]?.category, "phone");
+  assert.equal(scan("0712345678")[0]?.category, "phone");
+});
+
+test("does not flag a 10-digit run that isn't a phone", () => {
+  assert.deepEqual(scan("order 1623456789 shipped"), []); // starts with 1, no +
+});
+
+test("does not pick a phone out of a longer digit run", () => {
+  // The CNP's 13 digits shouldn't yield a phone; lookarounds reject the glue.
+  assert.deepEqual(categories("1960209025813").filter((c) => c === "phone"), []);
+});
+
+test("can disable the phone category", () => {
+  assert.deepEqual(scan("0712345678", { enabled: { phone: false } }), []);
+});
