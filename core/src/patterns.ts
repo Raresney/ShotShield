@@ -83,6 +83,31 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     source: "[1-9]\\d{12}", baseConfidence: 0.4,
     refine: (raw) => (cnpValid(raw) ? { confidence: 0.95 } : false) },
 
+  // ── ID documents ────────────────────────────────────────────────────────────
+  // Machine-readable zone: the `<`-padded block at the bottom of passports and
+  // ID cards. Its signature is a long, all-uppercase run of letters/digits with
+  // `<` filler — which ordinary prose and code (lowercase, `>`, `/`) never make.
+  // It packs name, document number, nationality and birth date, so the whole run
+  // is critical. (Reading the `<` filler off a photo needs a clean, upright scan.)
+  { category: "mrz", label: "ID machine-readable zone", severity: "critical",
+    source: "[A-Z0-9<]*<<[A-Z0-9<]*", baseConfidence: 0.5,
+    refine: (raw) => {
+      if (raw.length < 10) return false;
+      const fillers = (raw.match(/</g) ?? []).length;
+      if (fillers < 2 || raw.length - fillers < 4 || !/[A-Z]/.test(raw)) return false;
+      // A country code or a leading document-type letter marks a true MRZ line.
+      const strong = /ROU/.test(raw) || /^[IPAC]</.test(raw);
+      return { confidence: strong ? 0.96 : 0.85 };
+    } },
+
+  // Romanian ID card series + number, e.g. "SERIA RK NR 123456". Anchored on the
+  // printed "seria" label so a stray two-letters-plus-six-digits run elsewhere on
+  // screen isn't swept up; the card number has no public checksum, so the anchor
+  // carries the precision. Series letters must be uppercase (as printed).
+  { category: "id_document", label: "ID card number (RO)", severity: "high",
+    source: "[Ss][Ee][Rr][Ii][Aa]\\s+[A-Z]{2}\\s*(?:[Nn][Rr]\\.?|[Nn]um[ăa]r)?\\s*\\d{6}",
+    baseConfidence: 0.9 },
+
   // ── Email ─────────────────────────────────────────────────────────────────
   { category: "email", label: "Email address", severity: "medium",
     source: "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,24}", baseConfidence: 0.9 },

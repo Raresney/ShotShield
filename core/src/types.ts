@@ -7,6 +7,8 @@ export type Category =
   | "credit_card"
   | "iban"
   | "national_id"
+  | "id_document"
+  | "mrz"
   | "email"
   | "custom";
 
