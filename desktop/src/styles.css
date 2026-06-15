@@ -182,6 +182,11 @@ textarea:focus {
   height: auto;
   border-radius: 6px;
 }
+/* `display: block` above beats the UA `[hidden]` rule, so spell out the
+   hidden state or Clear can't actually remove the image. */
+.canvas[hidden] {
+  display: none;
+}
 
 .stage-actions {
   display: flex;
