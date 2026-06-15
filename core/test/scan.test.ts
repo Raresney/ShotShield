@@ -156,3 +156,27 @@ test("detects a Romanian ID card series and number", () => {
 test("needs the series label, not any two letters and six digits", () => {
   assert.deepEqual(scan("order code AB 123456 shipped"), []);
 });
+
+test("redacts a name behind a Romanian ID label", () => {
+  const d = scan("NUME POPESCU");
+  assert.equal(d.length, 1);
+  assert.equal(d[0]!.category, "name");
+  assert.equal(d[0]!.text, "POPESCU"); // the label itself stays out of the hit
+});
+
+test("handles trilingual labels and a two-part given name", () => {
+  assert.equal(scan("Prenume ION ANDREI")[0]?.category, "name");
+  assert.equal(scan("Last name SMITH")[0]?.category, "name");
+});
+
+test("does not fire on a label without an uppercase value", () => {
+  assert.deepEqual(scan("the last name field is required"), []);
+});
+
+test("does not redact a bare column-header label as a name", () => {
+  assert.deepEqual(scan("NUME PRENUME"), []);
+});
+
+test("can disable the name category", () => {
+  assert.deepEqual(scan("NUME POPESCU", { enabled: { name: false } }), []);
+});
