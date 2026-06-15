@@ -128,6 +128,29 @@ test("a Luhn-valid CNP is a national ID, not a payment card", () => {
   assert.equal(dets[0]!.category, "national_id");
 });
 
+test("redacts a CNP behind its label even when OCR splits the digits", () => {
+  // A phone photo often breaks the 13-digit run with stray spaces; anchored on
+  // the printed "CNP" label we stitch it back together. The strict pass can't —
+  // it needs 13 contiguous digits.
+  const dets = scan("CNP 196020 9025813");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+});
+
+test("redacts a labelled CNP whose control digit a misread has broken", () => {
+  // 1960209025811 fails the checksum (the real number ends in 3). On its own it's
+  // correctly ignored; behind a "CNP" label we redact it anyway rather than leave
+  // an ID number in the clear over a single OCR typo.
+  assert.deepEqual(scan("1960209025811"), []);
+  const labelled = scan("CNP 1960209025811");
+  assert.equal(labelled.length, 1);
+  assert.equal(labelled[0]!.category, "national_id");
+});
+
+test("does not redact a short number after the letters CNP", () => {
+  assert.deepEqual(scan("CNP 1234"), []);
+});
+
 test("detects the name line of an ID machine-readable zone", () => {
   // surname<<given-names, padded with `<` — a TD1/TD3 MRZ name line.
   const dets = scan("POPESCU<<ION<<<<<<<<<<<<<<<<<<");
