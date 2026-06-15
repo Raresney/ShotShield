@@ -80,6 +80,20 @@ test("does not flag a long number that fails Luhn", () => {
   assert.deepEqual(scan("order 1234 5678 9012 3456"), []);
 });
 
+test("does not flag a card glued inside an ID machine-readable zone", () => {
+  // The bottom of a Romanian ID is an MRZ: digit runs packed against letters
+  // and `<` fillers. A run there can pass Luhn by chance (4111… is the Visa
+  // test number) but it isn't a card — the boundary lookarounds reject it.
+  assert.deepEqual(scan("IDROU4111111111111111<<<<<<"), []);
+});
+
+test("still detects a real card surrounded by punctuation", () => {
+  const dets = scan("card:4111-1111-1111-1111.");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "credit_card");
+  assert.equal(dets[0]!.label, "Visa card");
+});
+
 test("detects a valid IBAN", () => {
   const dets = scan("send it to DE89 3704 0044 0532 0130 00 please");
   assert.equal(dets.length, 1);
@@ -90,8 +104,24 @@ test("ignores an IBAN-shaped string with a bad checksum", () => {
   assert.deepEqual(scan("ref DE00 3704 0044 0532 0130 00"), []);
 });
 
+test("does not start an IBAN match glued to a preceding letter", () => {
+  // Same MRZ problem as cards: the country code shouldn't be picked up mid-token.
+  assert.deepEqual(scan("XDE89370400440532013000"), []);
+  // …but the same IBAN on its own is still detected.
+  assert.equal(scan("IBAN: DE89 3704 0044 0532 0130 00").length, 1);
+});
+
 test("detects a Romanian CNP", () => {
   const dets = scan("CNP 1960209025813 pe buletin");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+});
+
+test("a Luhn-valid CNP is a national ID, not a payment card", () => {
+  // 1800209020157 passes both the CNP control digit and Luhn. With the old
+  // 13-digit floor the critical card rule shadowed the CNP; the 14-digit floor
+  // keeps a 13-digit national ID out of the card detector entirely.
+  const dets = scan("CNP 1800209020157");
   assert.equal(dets.length, 1);
   assert.equal(dets[0]!.category, "national_id");
 });
