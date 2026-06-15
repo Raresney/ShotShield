@@ -254,3 +254,21 @@ test("can disable the bic and cvv categories", () => {
   assert.deepEqual(scan("BIC: RZBRROBU", { enabled: { bic: false } }), []);
   assert.deepEqual(scan("CVV: 123", { enabled: { cvv: false } }), []);
 });
+
+test("detects a Romanian tax id (CUI/CIF) with a valid checksum", () => {
+  assert.equal(scan("CUI 13548146")[0]?.category, "tax_id");
+  assert.equal(scan("factura RO13548146")[0]?.category, "tax_id");
+  assert.equal(scan("CIF: 13548146")[0]?.category, "tax_id");
+});
+
+test("ignores a CUI-shaped number with a bad checksum", () => {
+  assert.deepEqual(scan("CUI 13548147"), []);
+});
+
+test("does not flag a bare number without the RO/CUI anchor", () => {
+  assert.deepEqual(categories("13548146").filter((c) => c === "tax_id"), []);
+});
+
+test("can disable the tax_id category", () => {
+  assert.deepEqual(scan("CUI 13548146", { enabled: { tax_id: false } }), []);
+});

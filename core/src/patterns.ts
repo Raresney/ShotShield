@@ -2,7 +2,7 @@
 // validates a raw match. Adding a detector means adding a row here.
 
 import type { Category, Severity } from "./types.ts";
-import { luhn, ibanValid, cnpValid } from "./validators.ts";
+import { luhn, ibanValid, cnpValid, cuiValid } from "./validators.ts";
 
 export interface PatternSpec {
   category: Category;
@@ -118,6 +118,15 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
       if (d.length < 12 || d.length > 16) return false;
       return { confidence: d.length === 13 && cnpValid(d) ? 0.97 : 0.85 };
     } },
+
+  // Tax ID (Romanian CUI/CIF): 2–10 digits with a control digit. A short number
+  // clears the checksum ~9% of the time, so the bare value isn't enough — anchor
+  // on a RO fiscal prefix or a CUI/CIF/"cod fiscal" label, then let the checksum
+  // confirm it.
+  { category: "tax_id", label: "Tax ID (RO)", severity: "high",
+    source: "(?<=\\b(?:CUI|CIF|[Cc]od\\sfiscal|RO)[\\s:.]{0,3})\\d{2,10}(?!\\d)",
+    baseConfidence: 0.6,
+    refine: (raw) => (cuiValid(raw) ? { confidence: 0.95 } : false) },
 
   // ── ID documents ────────────────────────────────────────────────────────────
   // Machine-readable zone: the `<`-padded block at the bottom of passports and
