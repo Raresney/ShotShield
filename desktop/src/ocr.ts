@@ -34,6 +34,18 @@ let workerPromise: ReturnType<typeof createWorker> | null = null;
 let onProgress: ProgressFn | null = null;
 let phase: "reading" | "orienting" = "reading";
 
+// One worker already serializes recognize(); this serializes the JS around it too.
+// Without it a second scan starting mid-read overwrites onProgress/phase, and the
+// first scan's finally nulls progress while the second is still running. Each OCR
+// call acquires the lock first, so the progress lifecycle never overlaps.
+let lock: Promise<void> = Promise.resolve();
+function acquire(): Promise<() => void> {
+  const prev = lock;
+  let release!: () => void;
+  lock = new Promise<void>((res) => (release = res));
+  return prev.then(() => release);
+}
+
 // One worker, created on first use and reused. Every asset is local
 // (see scripts/copy-tesseract.mjs) — nothing is fetched at runtime.
 function getWorker() {
@@ -46,6 +58,11 @@ function getWorker() {
       logger: (m) => {
         if (m.status === "recognizing text") onProgress?.(phase, m.progress);
       },
+    }).catch((err) => {
+      // Don't cache a rejected init. A transient failure (a missing asset, low
+      // memory) would otherwise kill OCR until restart; reset so the next call retries.
+      workerPromise = null;
+      throw err;
     });
   }
   return workerPromise;
@@ -97,6 +114,7 @@ async function recognize(source: HTMLImageElement | HTMLCanvasElement): Promise<
 
 /** OCR an image at its current orientation. */
 export async function ocr(image: HTMLImageElement, progress?: ProgressFn): Promise<OcrResult> {
+  const release = await acquire();
   onProgress = progress ?? null;
   phase = "reading";
   try {
@@ -104,6 +122,7 @@ export async function ocr(image: HTMLImageElement, progress?: ProgressFn): Promi
     return { text, words };
   } finally {
     onProgress = null;
+    release();
   }
 }
 
@@ -121,6 +140,7 @@ export async function ocrAutoOrient(
   image: HTMLImageElement,
   progress?: ProgressFn,
 ): Promise<OrientedOcr> {
+  const release = await acquire();
   onProgress = progress ?? null;
   try {
     phase = "reading";
@@ -151,5 +171,6 @@ export async function ocrAutoOrient(
     return { text: best.text, words: best.words, quarterTurns: bestTurns };
   } finally {
     onProgress = null;
+    release();
   }
 }

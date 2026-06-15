@@ -285,10 +285,20 @@ canvas.addEventListener("pointercancel", () => {
   drawbox.hidden = true;
 });
 
+// Phone photos can be 50MP+, which makes a huge canvas and a slow OCR pass; an
+// extreme panorama can even exceed the WebView canvas limit. Cap the longest side
+// so everything downstream (boxes, paint, export) works at a sane resolution.
+const MAX_WORKING_DIM = 4096;
+async function fitToWorkingSize(img: HTMLImageElement): Promise<HTMLImageElement> {
+  if (Math.max(img.naturalWidth, img.naturalHeight) <= MAX_WORKING_DIM) return img;
+  return loadImageEl(orientedCanvas(img, 0, MAX_WORKING_DIM).toDataURL("image/png"));
+}
+
 function loadImage(src: string, opts: { autoOrient: boolean }, token: number): void {
   loadImageEl(src)
+    .then((img) => (token === gen ? fitToWorkingSize(img) : null))
     .then((img) => {
-      if (token !== gen) return;
+      if (!img || token !== gen) return;
       // A fresh image starts with no manual boxes and no settled OCR image, so
       // drawing stays disabled until this load's OCR pass finishes.
       currentImg = null;
