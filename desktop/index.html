@@ -22,8 +22,13 @@
           <p class="stage-sub">ID cards, bank cards, configs — scanned on your device, nothing uploaded.</p>
         </div>
         <canvas id="canvas" class="canvas" hidden></canvas>
+        <div id="drawbox" class="draw-box" hidden></div>
         <input id="file" type="file" accept="image/*" hidden />
       </div>
+
+      <p id="drawHint" class="draw-hint" hidden>
+        Drag on the image to redact an area by hand — a face, an address, anything the scan misses.
+      </p>
 
       <div class="stage-actions">
         <button id="rotate" class="btn" hidden>Rotate</button>

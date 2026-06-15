@@ -1,5 +1,5 @@
 import { scan, type Detection } from "@shotshield/core";
-import { ocr, ocrAutoOrient, type OcrWord, type ProgressFn } from "./ocr.ts";
+import { ocr, ocrAutoOrient, type Box, type OcrWord, type ProgressFn } from "./ocr.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
 import { locate, paint, type Region } from "./redact.ts";
 import { downloadCanvas } from "./export.ts";
@@ -14,6 +14,8 @@ const rotateBtn = document.querySelector<HTMLButtonElement>("#rotate")!;
 const input = document.querySelector<HTMLTextAreaElement>("#input")!;
 const summary = document.querySelector<HTMLParagraphElement>("#summary")!;
 const results = document.querySelector<HTMLDivElement>("#results")!;
+const drawbox = document.querySelector<HTMLDivElement>("#drawbox")!;
+const drawHint = document.querySelector<HTMLParagraphElement>("#drawHint")!;
 
 // Don't echo full secrets back in the list — show just enough to recognise.
 function mask(s: string): string {
@@ -62,6 +64,7 @@ let gen = 0;
 let currentImg: HTMLImageElement | null = null;
 let sourceImg: HTMLImageElement | null = null; // the image as shown (post-rotation), for re-rotating
 let regions: Region[] = [];
+let manualBoxes: Box[] = []; // hand-drawn redaction rectangles, in image-pixel space
 
 function displayImage(img: HTMLImageElement): void {
   sourceImg = img;
@@ -72,6 +75,7 @@ function displayImage(img: HTMLImageElement): void {
   stagePrompt.hidden = true;
   clearBtn.hidden = false;
   rotateBtn.hidden = false;
+  drawHint.hidden = false;
   stage.classList.add("has-image");
 }
 
@@ -122,26 +126,31 @@ async function scanImage(
 
   if (!text.trim()) {
     regions = [];
-    paint(canvas, working, regions);
+    paint(canvas, working, regions, manualBoxes);
     exportBtn.hidden = false;
-    summary.textContent = "No readable text found — if the photo is sideways, try Rotate.";
+    summary.textContent = "No readable text found — drag on the image to redact by hand, or try Rotate.";
     return;
   }
 
   regions = locate(scan(text), words);
-  paint(canvas, working, regions);
+  paint(canvas, working, regions, manualBoxes);
   renderRegions();
   exportBtn.hidden = false;
 }
 
 function renderRegions(): void {
-  results.replaceChildren(...regions.map(regionRow));
-  if (regions.length === 0) {
-    summary.textContent = "Nothing sensitive found. If the text looks sideways, try Rotate.";
-    return;
+  results.replaceChildren(...regions.map(regionRow), ...manualBoxes.map(manualRow));
+
+  const parts: string[] = [];
+  if (regions.length > 0) {
+    const hidden = regions.filter((r) => r.hidden).length;
+    parts.push(`${hidden} of ${regions.length} hidden`);
   }
-  const hidden = regions.filter((r) => r.hidden).length;
-  summary.textContent = `${hidden} of ${regions.length} hidden`;
+  if (manualBoxes.length > 0) parts.push(`${manualBoxes.length} manual`);
+  summary.textContent =
+    parts.length > 0
+      ? parts.join(" · ")
+      : "Nothing sensitive found — drag on the image to redact anything by hand.";
 }
 
 // A finding row in image mode is a toggle: click to cover/uncover its region.
@@ -176,14 +185,114 @@ function toggle(index: number): void {
   const region = regions[index];
   if (!region || !currentImg) return;
   region.hidden = !region.hidden;
-  paint(canvas, currentImg, regions);
+  repaint();
   renderRegions();
 }
+
+// ── Manual redaction ──
+// Drag anywhere on the image to black out a region the scan can't catch — a
+// face, an address, a signature. Boxes are stored in image-pixel space so they
+// survive the canvas being scaled to fit, and painted onto the canvas itself so
+// the saved PNG carries them.
+function repaint(): void {
+  if (currentImg) paint(canvas, currentImg, regions, manualBoxes);
+}
+
+// A manual box, listed beside the auto findings. Clicking the row removes it.
+function manualRow(box: Box, index: number): HTMLElement {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = "hit hit-toggle";
+  el.setAttribute("aria-pressed", "true");
+
+  const dot = document.createElement("span");
+  dot.className = "sev sev-critical";
+  dot.title = "manual";
+
+  const label = document.createElement("span");
+  label.className = "label";
+  label.textContent = "Redacted area";
+
+  const size = document.createElement("code");
+  size.className = "match";
+  size.textContent = `${Math.round(box.w)}×${Math.round(box.h)}`;
+
+  const pill = document.createElement("span");
+  pill.className = "pill";
+  pill.textContent = "Remove";
+
+  el.append(dot, label, size, pill);
+  el.addEventListener("click", () => {
+    manualBoxes.splice(index, 1);
+    repaint();
+    renderRegions();
+  });
+  return el;
+}
+
+// Map a pointer's client coordinates to image pixels, clamped to the canvas.
+function toImageXY(clientX: number, clientY: number): { x: number; y: number } {
+  const r = canvas.getBoundingClientRect();
+  const x = ((clientX - r.left) / r.width) * canvas.width;
+  const y = ((clientY - r.top) / r.height) * canvas.height;
+  return {
+    x: Math.max(0, Math.min(canvas.width, x)),
+    y: Math.max(0, Math.min(canvas.height, y)),
+  };
+}
+
+let drag: { x: number; y: number; cx: number; cy: number } | null = null;
+
+canvas.addEventListener("pointerdown", (e) => {
+  if (!currentImg) return; // wait until this image's OCR pass has settled
+  e.preventDefault();
+  const p = toImageXY(e.clientX, e.clientY);
+  drag = { x: p.x, y: p.y, cx: e.clientX, cy: e.clientY };
+  canvas.setPointerCapture(e.pointerId);
+});
+
+canvas.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  // The live preview rectangle is drawn in the stage's own coordinate space.
+  const s = stage.getBoundingClientRect();
+  drawbox.style.left = `${Math.min(drag.cx, e.clientX) - s.left}px`;
+  drawbox.style.top = `${Math.min(drag.cy, e.clientY) - s.top}px`;
+  drawbox.style.width = `${Math.abs(e.clientX - drag.cx)}px`;
+  drawbox.style.height = `${Math.abs(e.clientY - drag.cy)}px`;
+  drawbox.hidden = false;
+});
+
+canvas.addEventListener("pointerup", (e) => {
+  if (!drag) return;
+  drawbox.hidden = true;
+  const end = toImageXY(e.clientX, e.clientY);
+  const x = Math.min(drag.x, end.x);
+  const y = Math.min(drag.y, end.y);
+  const w = Math.abs(end.x - drag.x);
+  const h = Math.abs(end.y - drag.y);
+  drag = null;
+  // Require a real, big-enough rectangle. Written as `>=` so a NaN (e.g. a
+  // zero-size canvas rect) fails the test instead of slipping through, the way
+  // `w < 6` would.
+  if (!(w >= 6 && h >= 6)) return;
+  manualBoxes.push({ x, y, w, h });
+  repaint();
+  renderRegions();
+});
+
+canvas.addEventListener("pointercancel", () => {
+  drag = null;
+  drawbox.hidden = true;
+});
 
 function loadImage(src: string, opts: { autoOrient: boolean }, token: number): void {
   loadImageEl(src)
     .then((img) => {
       if (token !== gen) return;
+      // A fresh image starts with no manual boxes and no settled OCR image, so
+      // drawing stays disabled until this load's OCR pass finishes.
+      currentImg = null;
+      manualBoxes = [];
       displayImage(img);
       void scanImage(img, token, opts);
     })
@@ -207,11 +316,14 @@ function clearImage(): void {
   currentImg = null;
   sourceImg = null;
   regions = [];
+  manualBoxes = [];
   canvas.hidden = true;
+  drawbox.hidden = true;
   stagePrompt.hidden = false;
   clearBtn.hidden = true;
   rotateBtn.hidden = true;
   exportBtn.hidden = true;
+  drawHint.hidden = true;
   stage.classList.remove("has-image");
   summary.textContent = "";
   results.replaceChildren();
