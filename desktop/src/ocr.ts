@@ -51,8 +51,16 @@ function getWorker() {
   return workerPromise;
 }
 
+// A confident run of 4+ letters. Rotated or upside-down text gives Tesseract
+// only short, shaky fragments, so counting these separates an upright read from
+// a sideways one far more reliably than a raw confidence count — which Tesseract
+// happily hands to the garbage tokens it reads off sideways text.
+function isRealWord(text: string, confidence: number): boolean {
+  return confidence >= 60 && /^\p{L}{4,}$/u.test(text);
+}
+
 interface Scored extends OcrResult {
-  /** Count of confident, real-looking words — a proxy for "read the right way up". */
+  /** How many real words we read — a robust proxy for "this is the right way up". */
   score: number;
 }
 
@@ -78,7 +86,7 @@ async function recognize(source: HTMLImageElement | HTMLCanvasElement): Promise<
             end: text.length,
             box: { x: w.bbox.x0, y: w.bbox.y0, w: w.bbox.x1 - w.bbox.x0, h: w.bbox.y1 - w.bbox.y0 },
           });
-          if (w.confidence >= 70 && w.text.length >= 2 && /[A-Za-z0-9]/.test(w.text)) score++;
+          if (isRealWord(w.text, w.confidence)) score++;
         }
         text += "\n";
       }
@@ -99,10 +107,10 @@ export async function ocr(image: HTMLImageElement, progress?: ProgressFn): Promi
   }
 }
 
-// Above this many confident words we trust the orientation and skip the search.
-const GOOD_ENOUGH = 6;
+// This many real words means the read is clearly upright — skip the search.
+const CLEARLY_UPRIGHT = 8;
 // Orientation only needs a relative score, so search on a downscaled copy.
-const SEARCH_MAX_DIM = 1000;
+const SEARCH_MAX_DIM = 1200;
 
 /**
  * OCR with automatic orientation. Reads the image as-is first; only if that
@@ -117,11 +125,12 @@ export async function ocrAutoOrient(
   try {
     phase = "reading";
     const first = await recognize(image);
-    if (first.score >= GOOD_ENOUGH) {
+    if (first.score >= CLEARLY_UPRIGHT) {
       return { text: first.text, words: first.words, quarterTurns: 0 };
     }
 
-    // Poor read — maybe it's sideways. Score all four orientations downscaled.
+    // Not clearly upright — it may be sideways. Score all four orientations on a
+    // downscaled copy (a like-for-like comparison) and keep whichever reads best.
     phase = "orienting";
     let bestTurns = 0;
     let bestScore = -1;
