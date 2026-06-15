@@ -70,8 +70,11 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     } },
 
   // ── IBAN ──────────────────────────────────────────────────────────────────
+  // The leading lookbehind stops the country-code pair from starting inside a
+  // longer token — e.g. the "OU82…" buried in an ID's "IDROU82…" MRZ line,
+  // which could otherwise clear mod-97 by chance.
   { category: "iban", label: "IBAN", severity: "high",
-    source: "[A-Z]{2}\\d{2}(?:[ ]?[A-Z0-9]){11,30}", baseConfidence: 0.7,
+    source: "(?<![0-9A-Za-z<])[A-Z]{2}\\d{2}(?:[ ]?[A-Z0-9]){11,30}", baseConfidence: 0.7,
     refine: (raw) => (ibanValid(raw.replace(/\s/g, "")) ? { confidence: 0.98 } : false) },
 
   // ── National IDs ──────────────────────────────────────────────────────────

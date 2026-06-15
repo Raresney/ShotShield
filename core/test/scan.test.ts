@@ -104,6 +104,13 @@ test("ignores an IBAN-shaped string with a bad checksum", () => {
   assert.deepEqual(scan("ref DE00 3704 0044 0532 0130 00"), []);
 });
 
+test("does not start an IBAN match glued to a preceding letter", () => {
+  // Same MRZ problem as cards: the country code shouldn't be picked up mid-token.
+  assert.deepEqual(scan("XDE89370400440532013000"), []);
+  // …but the same IBAN on its own is still detected.
+  assert.equal(scan("IBAN: DE89 3704 0044 0532 0130 00").length, 1);
+});
+
 test("detects a Romanian CNP", () => {
   const dets = scan("CNP 1960209025813 pe buletin");
   assert.equal(dets.length, 1);
