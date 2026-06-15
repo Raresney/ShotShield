@@ -226,7 +226,12 @@ stage.addEventListener("keydown", (e) => {
     fileInput.click();
   }
 });
-fileInput.addEventListener("change", () => handleFile(fileInput.files?.[0]));
+fileInput.addEventListener("change", () => {
+  handleFile(fileInput.files?.[0]);
+  // Clear the value so choosing the same file again (e.g. after Clear) still
+  // fires `change` — otherwise the picker sees no change and nothing loads.
+  fileInput.value = "";
+});
 clearBtn.addEventListener("click", clearImage);
 exportBtn.addEventListener("click", () => downloadCanvas(canvas, "shotshield-redacted.png"));
 rotateBtn.addEventListener("click", () => {
