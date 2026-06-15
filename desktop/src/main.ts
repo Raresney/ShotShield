@@ -1,5 +1,6 @@
 import { scan, type Detection } from "@shotshield/core";
-import { ocr } from "./ocr.ts";
+import { ocr, ocrAutoOrient, type OcrWord, type ProgressFn } from "./ocr.ts";
+import { orientedCanvas, loadImageEl } from "./image.ts";
 import { locate, paint, type Region } from "./redact.ts";
 import { downloadCanvas } from "./export.ts";
 
@@ -62,7 +63,7 @@ let currentImg: HTMLImageElement | null = null;
 let sourceImg: HTMLImageElement | null = null; // the image as shown (post-rotation), for re-rotating
 let regions: Region[] = [];
 
-function showImage(img: HTMLImageElement): void {
+function displayImage(img: HTMLImageElement): void {
   sourceImg = img;
   canvas.width = img.naturalWidth;
   canvas.height = img.naturalHeight;
@@ -72,40 +73,63 @@ function showImage(img: HTMLImageElement): void {
   clearBtn.hidden = false;
   rotateBtn.hidden = false;
   stage.classList.add("has-image");
-  void scanImage(img, gen);
 }
 
-async function scanImage(img: HTMLImageElement, token: number): Promise<void> {
+async function scanImage(
+  img: HTMLImageElement,
+  token: number,
+  opts: { autoOrient: boolean },
+): Promise<void> {
   summary.textContent = "Reading image…";
   results.replaceChildren();
 
-  let result;
+  const onProgress: ProgressFn = (phase, fraction) => {
+    if (token !== gen) return;
+    summary.textContent =
+      phase === "orienting" ? "Checking orientation…" : `Reading image… ${Math.round(fraction * 100)}%`;
+  };
+
+  let text = "";
+  let words: OcrWord[] = [];
+  let working = img;
   try {
-    result = await ocr(img, (p) => {
-      if (token === gen) summary.textContent = `Reading image… ${Math.round(p * 100)}%`;
-    });
+    if (opts.autoOrient) {
+      const oriented = await ocrAutoOrient(img, onProgress);
+      if (token !== gen) return;
+      // The boxes come back in the upright frame, so show the image that way too.
+      if (oriented.quarterTurns !== 0) {
+        working = await loadImageEl(orientedCanvas(img, oriented.quarterTurns).toDataURL("image/png"));
+        if (token !== gen) return;
+        displayImage(working);
+      }
+      text = oriented.text;
+      words = oriented.words;
+    } else {
+      const result = await ocr(img, onProgress);
+      if (token !== gen) return;
+      text = result.text;
+      words = result.words;
+    }
   } catch (err) {
     if (token !== gen) return;
     console.error("OCR failed", err);
     summary.textContent = `Couldn't read the image: ${err instanceof Error ? err.message : String(err)}`;
     return;
   }
-  if (token !== gen) return; // a newer image (or a clear) superseded this one
 
-  const { text, words } = result;
+  currentImg = working;
   console.log("OCR done:", { chars: text.length, words: words.length });
-  currentImg = img;
 
   if (!text.trim()) {
     regions = [];
-    paint(canvas, img, regions);
+    paint(canvas, working, regions);
     exportBtn.hidden = false;
     summary.textContent = "No readable text found — if the photo is sideways, try Rotate.";
     return;
   }
 
   regions = locate(scan(text), words);
-  paint(canvas, img, regions);
+  paint(canvas, working, regions);
   renderRegions();
   exportBtn.hidden = false;
 }
@@ -156,30 +180,25 @@ function toggle(index: number): void {
   renderRegions();
 }
 
-function loadImage(src: string): void {
-  const img = new Image();
-  img.addEventListener("load", () => showImage(img));
-  img.src = src;
-}
-
-// Rotate the image 90° clockwise onto a new canvas. Re-feeding the result
-// through loadImage re-runs OCR on the rotated frame, so the boxes still line up.
-function rotate90(img: HTMLImageElement): HTMLCanvasElement {
-  const c = document.createElement("canvas");
-  c.width = img.naturalHeight;
-  c.height = img.naturalWidth;
-  const ctx = c.getContext("2d")!;
-  ctx.translate(c.width, 0);
-  ctx.rotate(Math.PI / 2);
-  ctx.drawImage(img, 0, 0);
-  return c;
+function loadImage(src: string, opts: { autoOrient: boolean }, token: number): void {
+  loadImageEl(src)
+    .then((img) => {
+      if (token !== gen) return;
+      displayImage(img);
+      void scanImage(img, token, opts);
+    })
+    .catch(() => {
+      if (token === gen) summary.textContent = "Couldn't load the image.";
+    });
 }
 
 function handleFile(file: File | null | undefined): void {
   if (!file || !file.type.startsWith("image/")) return;
-  gen++;
+  const token = ++gen;
   const reader = new FileReader();
-  reader.addEventListener("load", () => loadImage(reader.result as string));
+  reader.addEventListener("load", () =>
+    loadImage(reader.result as string, { autoOrient: true }, token),
+  );
   reader.readAsDataURL(file);
 }
 
@@ -212,8 +231,9 @@ clearBtn.addEventListener("click", clearImage);
 exportBtn.addEventListener("click", () => downloadCanvas(canvas, "shotshield-redacted.png"));
 rotateBtn.addEventListener("click", () => {
   if (!sourceImg) return;
-  gen++;
-  loadImage(rotate90(sourceImg).toDataURL("image/png"));
+  // Manual rotate is a deliberate 90° nudge — don't re-run the auto search.
+  const token = ++gen;
+  loadImage(orientedCanvas(sourceImg, 1).toDataURL("image/png"), { autoOrient: false }, token);
 });
 
 stage.addEventListener("dragover", (e) => {
