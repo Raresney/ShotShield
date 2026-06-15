@@ -57,12 +57,15 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
 
   // ── Payment cards ─────────────────────────────────────────────────────────
   // Loose digit-run match (spaces/dashes allowed), then Luhn decides. Brand is
-  // a nicer label than a bare "card number".
+  // a nicer label than a bare "card number". The lookarounds reject a run glued
+  // to letters or the `<` filler of an ID's machine-readable zone — those pack
+  // long digit strings that pass Luhn by chance but aren't cards. Floor is 14:
+  // 13-digit PANs are extinct and 13 collides exactly with the Romanian CNP.
   { category: "credit_card", label: "Payment card", severity: "critical",
-    source: "(?:\\d[ -]?){12,18}\\d", baseConfidence: 0.5,
+    source: "(?<![0-9A-Za-z<])(?:\\d[ -]?){13,18}\\d(?![0-9A-Za-z<])", baseConfidence: 0.5,
     refine: (raw) => {
       const d = digitsOnly(raw);
-      if (d.length < 13 || d.length > 19 || !luhn(d)) return false;
+      if (d.length < 14 || d.length > 19 || !luhn(d)) return false;
       return { confidence: 0.97, label: cardBrand(d) };
     } },
 
