@@ -20,6 +20,10 @@ dist-ssr/
 /desktop/public/vendor/tesseract/*
 !/desktop/public/vendor/tesseract/lang/
 
+# ───── face-api.js model (desktop) ─────
+# The tiny face detector model is copied from node_modules on predev/prebuild.
+/desktop/public/vendor/faceapi/
+
 # ───── Flutter (mobile) ─────
 .dart_tool/
 .flutter-plugins

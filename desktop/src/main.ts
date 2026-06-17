@@ -1,5 +1,6 @@
 import { scan, type Detection } from "@shotshield/core";
 import { ocr, ocrAutoOrient, type Box, type OcrWord, type ProgressFn } from "./ocr.ts";
+import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
 import { locate, paint, type Region } from "./redact.ts";
 import { downloadCanvas } from "./export.ts";
@@ -141,21 +142,49 @@ async function scanImage(
   }
 
   currentImg = working;
-  hideProgress();
   console.log("OCR done:", { chars: text.length, words: words.length });
 
-  if (!text.trim()) {
-    regions = [];
-    paint(canvas, working, regions, manualBoxes);
-    exportBtn.hidden = false;
-    summary.textContent = "No readable text found — drag on the image to redact by hand, or try Rotate.";
-    return;
-  }
+  // Text findings (may be empty) and faces both feed the same redaction list.
+  const textRegions = text.trim() ? locate(scan(text), words) : [];
 
-  regions = locate(scan(text), words);
+  // Faces are best-effort: a model-load failure must not drop the text findings.
+  summary.textContent = "Looking for faces…";
+  let faceRegions: Region[] = [];
+  try {
+    const { detectFaces } = await import("./faces.ts");
+    const hits = await detectFaces(working);
+    if (token !== gen) return;
+    faceRegions = hits.map(faceRegion);
+  } catch (err) {
+    console.error("Face detection failed", err);
+  }
+  if (token !== gen) return;
+
+  regions = [...textRegions, ...faceRegions];
+  hideProgress();
   paint(canvas, working, regions, manualBoxes);
   renderRegions();
   exportBtn.hidden = false;
+}
+
+// Wrap a detected face as a redaction region, so it lists, toggles, paints and
+// exports exactly like a text finding — hidden by default, since the portrait is
+// usually the most identifying thing on an ID.
+function faceRegion(hit: FaceHit): Region {
+  return {
+    detection: {
+      category: "face",
+      label: "Face",
+      severity: "critical",
+      start: 0,
+      end: 0,
+      text: "",
+      confidence: hit.score,
+      redactByDefault: true,
+    },
+    boxes: [hit.box],
+    hidden: true,
+  };
 }
 
 function renderRegions(): void {
@@ -193,7 +222,11 @@ function regionRow(region: Region, index: number): HTMLElement {
 
   const match = document.createElement("code");
   match.className = "match";
-  match.textContent = mask(region.detection.text);
+  // A face has no text to mask — show its size instead.
+  match.textContent =
+    region.detection.category === "face"
+      ? `${Math.round(region.boxes[0]?.w ?? 0)}×${Math.round(region.boxes[0]?.h ?? 0)} px`
+      : mask(region.detection.text);
 
   const conf = document.createElement("span");
   conf.className = "conf";
