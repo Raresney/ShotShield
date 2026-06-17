@@ -1,6 +1,18 @@
+<div align="center">
+
+<img src="docs/logo.png" alt="ShotShield logo" width="120" />
+
 # ShotShield
 
-Find sensitive data in a screenshot and cover it before you share the image. It all runs on your machine. Nothing is uploaded.
+Find sensitive data in a screenshot and cover it before you share the image. Runs on your machine, and nothing is uploaded.
+
+[![License](https://img.shields.io/github/license/Raresney/ShotShield?color=blue)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/Raresney/ShotShield?sort=semver)](https://github.com/Raresney/ShotShield/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Raresney/ShotShield/total)](https://github.com/Raresney/ShotShield/releases)
+![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri-24C8DB?logo=tauri&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+
+</div>
 
 You paste a screenshot into a chat or an issue, and only later notice it had an API key in the corner, or an IBAN, or your own face. ShotShield scans the picture locally, marks what it finds, and lets you paint over it. The redaction is baked into the file you export, not just drawn on top for show.
 
@@ -33,7 +45,11 @@ It's an npm workspace with two halves.
 
 `desktop/` is the app, built on Tauri v2 (a Rust shell around the system WebView) with a Vite and TypeScript front end. It does the OCR, the face pass, the canvas redaction and the export. A phone version is the long-term plan, not something that ships today.
 
-## Running it
+## Install
+
+Download the latest Windows installer from the [releases page](https://github.com/Raresney/ShotShield/releases/latest), run it, and you're set. The build isn't code-signed yet, so Windows SmartScreen may warn you on first launch. Click "More info" then "Run anyway".
+
+## Build from source
 
 You'll need a recent Node (22+) and the Tauri prerequisites for your platform: a Rust toolchain, plus the WebView2 runtime on Windows.
 
