@@ -147,6 +147,23 @@ test("redacts a labelled CNP whose control digit a misread has broken", () => {
   assert.equal(labelled[0]!.category, "national_id");
 });
 
+test("redacts a CNP glued to its label with a broken control digit", () => {
+  // "CNP1960209025811": OCR dropped the gap *and* flipped a digit. The strict run
+  // rejects the bad checksum, and a label anchor that demands a word boundary after
+  // "CNP" can't see a number fused onto it — so only the loosened anchor catches it.
+  const dets = scan("CNP1960209025811");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+});
+
+test("redacts a labelled CNP through letter-for-digit OCR slips", () => {
+  // Beyond O/I/S/B a photo flips 6→G and 2→Z. "19G0Z090Z5813" is 1960209025813
+  // mangled that way; undo the look-alikes behind the label and the control checks.
+  const dets = scan("CNP 19G0Z090Z5813");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+});
+
 test("does not redact a short number after the letters CNP", () => {
   assert.deepEqual(scan("CNP 1234"), []);
 });
