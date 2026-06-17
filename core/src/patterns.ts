@@ -103,17 +103,21 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     refine: (raw) => (cnpValid(raw) ? { confidence: 0.95 } : false) },
 
   // Then the buletin pass: the CNP printed behind a "CNP" label. A phone photo
-  // defeats the strict rule — OCR splits the run with stray spaces and flips the
-  // odd digit (O→0, S→5, B→8…), breaking the control digit so the match is thrown
-  // out. Anchored on the label we undo those confusables, allow the spaces, and
+  // defeats the strict rule — OCR splits the run with stray spaces, glues the
+  // label onto the number ("CNP5050…"), and flips digits to look-alike letters
+  // (O→0, S→5, B→8, but also 2→Z, 4→A, 6→G, 7→T, 9→g…), breaking the control
+  // digit. Anchored loosely on the label — leading boundary only, so a glued
+  // number still matches — we undo those confusables, allow the spaces, and
   // redact a ~13-digit run whether or not the checksum survives: the label carries
   // the precision, and one misread digit shouldn't leave an ID number in the clear.
   { category: "national_id", label: "CNP (RO)", severity: "high",
-    source: "(?<=\\bCNP\\b[\\s.:]{0,3})[1-9OoQDIlSBb][\\dOoQDIlSBb ]{10,15}",
+    source: "(?<=\\bCNP[\\s.:|/-]{0,4})[\\dOoQDIlSBbZzAGTgq][\\dOoQDIlSBbZzAGTgq ]{11,15}",
     baseConfidence: 0.85,
     refine: (raw) => {
       const d = raw
-        .replace(/[OoQD]/g, "0").replace(/[Il]/g, "1").replace(/S/g, "5").replace(/[Bb]/g, "8")
+        .replace(/[OoQD]/g, "0").replace(/[Il]/g, "1").replace(/[Zz]/g, "2")
+        .replace(/A/g, "4").replace(/S/g, "5").replace(/G/g, "6")
+        .replace(/T/g, "7").replace(/[Bb]/g, "8").replace(/[gq]/g, "9")
         .replace(/\D/g, "");
       if (d.length < 12 || d.length > 16) return false;
       return { confidence: d.length === 13 && cnpValid(d) ? 0.97 : 0.85 };
