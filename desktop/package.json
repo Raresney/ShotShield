@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "predev": "node scripts/copy-tesseract.mjs",
+    "predev": "node scripts/copy-vendor.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/copy-tesseract.mjs",
+    "prebuild": "node scripts/copy-vendor.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
@@ -14,6 +14,7 @@
   "dependencies": {
     "@shotshield/core": "*",
     "@tauri-apps/api": "^2",
+    "@vladmandic/face-api": "^1.7.15",
     "tesseract.js": "^7.0.0",
     "tesseract.js-core": "^7.0.0"
   },
