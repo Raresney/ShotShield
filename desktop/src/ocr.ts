@@ -1,5 +1,5 @@
 import { createWorker } from "tesseract.js";
-import { orientedCanvas } from "./image.ts";
+import { orientedCanvas, preprocessForOcr } from "./image.ts";
 
 export interface Box {
   x: number;
@@ -85,10 +85,19 @@ interface Scored extends OcrResult {
 }
 
 // Run one OCR pass and rebuild the text from the words rather than trusting
-// data.text, so each character offset maps straight back to its word box.
-async function recognize(source: HTMLImageElement | HTMLCanvasElement): Promise<Scored> {
+// data.text, so each character offset maps straight back to its word box. With
+// `enhance` (the default) the source is contrast-stretched and upscaled first;
+// the orientation search skips it, since it only needs a relative word count.
+async function recognize(
+  source: HTMLImageElement | HTMLCanvasElement,
+  enhance = true,
+): Promise<Scored> {
+  const prepared = enhance ? preprocessForOcr(source) : null;
+  const input = prepared ? prepared.canvas : source;
+  const scale = prepared ? prepared.scale : 1;
+
   const worker = await getWorker();
-  const { data } = await worker.recognize(source, {}, { blocks: true, text: true });
+  const { data } = await worker.recognize(input, {}, { blocks: true, text: true });
 
   const words: OcrWord[] = [];
   let text = "";
@@ -104,7 +113,14 @@ async function recognize(source: HTMLImageElement | HTMLCanvasElement): Promise<
             text: w.text,
             start,
             end: text.length,
-            box: { x: w.bbox.x0, y: w.bbox.y0, w: w.bbox.x1 - w.bbox.x0, h: w.bbox.y1 - w.bbox.y0 },
+            // Divide back by `scale` so boxes land in the source image's pixels,
+            // not the (possibly upscaled) preprocessed canvas's.
+            box: {
+              x: w.bbox.x0 / scale,
+              y: w.bbox.y0 / scale,
+              w: (w.bbox.x1 - w.bbox.x0) / scale,
+              h: (w.bbox.y1 - w.bbox.y0) / scale,
+            },
           });
           if (isRealWord(w.text, w.confidence)) score++;
         }
@@ -159,7 +175,7 @@ export async function ocrAutoOrient(
     let bestScore = -1;
     for (const turns of [0, 1, 2, 3]) {
       onProgress?.("orienting", turns / 4);
-      const { score } = await recognize(orientedCanvas(image, turns, SEARCH_MAX_DIM));
+      const { score } = await recognize(orientedCanvas(image, turns, SEARCH_MAX_DIM), false);
       if (score > bestScore) {
         bestScore = score;
         bestTurns = turns;
