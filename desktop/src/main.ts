@@ -4,6 +4,7 @@ import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
 import { locate, paint, type Region } from "./redact.ts";
 import { downloadCanvas } from "./export.ts";
+import { loadSettings, renderSettings, scanConfig } from "./settings.ts";
 
 const stage = document.querySelector<HTMLDivElement>("#stage")!;
 const stagePrompt = document.querySelector<HTMLDivElement>("#stagePrompt")!;
@@ -20,6 +21,10 @@ const drawbox = document.querySelector<HTMLDivElement>("#drawbox")!;
 const drawHint = document.querySelector<HTMLParagraphElement>("#drawHint")!;
 const progress = document.querySelector<HTMLDivElement>("#progress")!;
 const progressBar = document.querySelector<HTMLDivElement>("#progressBar")!;
+const settingsBody = document.querySelector<HTMLDivElement>("#settingsBody")!;
+
+// Detection settings (which categories run, the confidence floor), persisted.
+const settings = loadSettings();
 
 function showProgress(fraction: number): void {
   progress.hidden = false;
@@ -68,12 +73,20 @@ function scanText(): void {
     results.replaceChildren();
     return;
   }
-  const dets = scan(input.value);
+  const dets = scan(input.value, scanConfig(settings));
   results.replaceChildren(...dets.map(row));
   summary.textContent = dets.length === 0 ? "Nothing sensitive found." : `${dets.length} found`;
 }
 
 input.addEventListener("input", scanText);
+
+// Re-run whatever is on screen when a setting changes — the text scan, and the
+// image's findings (recomputed from the cached OCR, so no fresh read needed).
+function onSettingsChange(): void {
+  scanText();
+  recomputeRegions();
+}
+renderSettings(settingsBody, settings, onSettingsChange);
 
 // ── Image path ──
 // Bumped on every load/clear so a slow OCR pass can't render stale results.
@@ -82,6 +95,10 @@ let currentImg: HTMLImageElement | null = null;
 let sourceImg: HTMLImageElement | null = null; // the image as shown (post-rotation), for re-rotating
 let regions: Region[] = [];
 let manualBoxes: Box[] = []; // hand-drawn redaction rectangles, in image-pixel space
+// The last OCR pass, cached so a settings change can re-derive findings without
+// reading the image again. Detected faces are cached the same way.
+let lastOcr: { text: string; words: OcrWord[] } | null = null;
+let lastFaces: Region[] = [];
 
 function displayImage(img: HTMLImageElement): void {
   sourceImg = img;
@@ -142,27 +159,39 @@ async function scanImage(
   }
 
   currentImg = working;
+  lastOcr = { text, words };
   console.log("OCR done:", { chars: text.length, words: words.length });
 
-  // Text findings (may be empty) and faces both feed the same redaction list.
-  const textRegions = text.trim() ? locate(scan(text), words) : [];
-
-  // Faces are best-effort: a model-load failure must not drop the text findings.
+  // Faces are best-effort and detected once per image, then cached: a model-load
+  // failure must not drop the text findings, and toggling the Faces setting later
+  // shouldn't re-run the detector.
   summary.textContent = "Looking for faces…";
-  let faceRegions: Region[] = [];
+  lastFaces = [];
   try {
     const { detectFaces } = await import("./faces.ts");
     const hits = await detectFaces(working);
     if (token !== gen) return;
-    faceRegions = hits.map(faceRegion);
+    lastFaces = hits.map(faceRegion);
   } catch (err) {
     console.error("Face detection failed", err);
   }
   if (token !== gen) return;
 
-  regions = [...textRegions, ...faceRegions];
   hideProgress();
-  paint(canvas, working, regions, manualBoxes);
+  recomputeRegions();
+}
+
+// Build the redaction list from the cached OCR and faces under the current
+// settings, then paint and render. Runs after a scan finishes and whenever a
+// setting changes, so toggling a category never triggers a fresh OCR pass.
+function recomputeRegions(): void {
+  if (!lastOcr || !currentImg) return;
+  const textRegions = lastOcr.text.trim()
+    ? locate(scan(lastOcr.text, scanConfig(settings)), lastOcr.words)
+    : [];
+  const faceRegions = settings.faces ? lastFaces : [];
+  regions = [...textRegions, ...faceRegions];
+  paint(canvas, currentImg, regions, manualBoxes);
   renderRegions();
   exportBtn.hidden = false;
 }
@@ -422,6 +451,8 @@ function clearImage(): void {
   sourceImg = null;
   regions = [];
   manualBoxes = [];
+  lastOcr = null;
+  lastFaces = [];
   canvas.hidden = true;
   drawbox.hidden = true;
   stagePrompt.hidden = false;
