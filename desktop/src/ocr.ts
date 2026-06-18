@@ -50,7 +50,9 @@ function acquire(): Promise<() => void> {
 // (see scripts/copy-tesseract.mjs) — nothing is fetched at runtime.
 function getWorker() {
   if (!workerPromise) {
-    workerPromise = createWorker("eng", 1, {
+    // English + Romanian: ID cards carry diacritics and Romanian field labels
+    // that the English model alone misreads. Both .traineddata files are local.
+    workerPromise = createWorker("eng+ron", 1, {
       workerPath: "/vendor/tesseract/worker.min.js",
       corePath: "/vendor/tesseract/core",
       langPath: "/vendor/tesseract/lang",
