@@ -127,6 +127,59 @@ textarea:focus {
   white-space: nowrap;
 }
 
+/* ── Detection settings ── */
+.settings {
+  margin: 0 0 16px;
+}
+.settings > summary {
+  width: max-content;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.settings > summary:hover {
+  color: var(--fg);
+}
+.settings-body {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px 16px;
+}
+.settings-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.settings-item input {
+  accent-color: var(--low);
+}
+.settings-slider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+}
+.settings-slider span {
+  flex: none;
+}
+.settings-slider input[type="range"] {
+  flex: 1;
+  accent-color: var(--low);
+}
+
 /* ── Image stage ── */
 .stage {
   position: relative;
