@@ -137,14 +137,33 @@ test("redacts a CNP behind its label even when OCR splits the digits", () => {
   assert.equal(dets[0]!.category, "national_id");
 });
 
-test("redacts a labelled CNP whose control digit a misread has broken", () => {
-  // 1960209025811 fails the checksum (the real number ends in 3). On its own it's
-  // correctly ignored; behind a "CNP" label we redact it anyway rather than leave
-  // an ID number in the clear over a single OCR typo.
-  assert.deepEqual(scan("1960209025811"), []);
+test("redacts a CNP whose control digit a misread has broken, label or not", () => {
+  // 1960209025811 fails the checksum (the real number ends in 3) but its embedded
+  // date and county still read true. We redact it on the strength of that structure
+  // rather than leave an ID number in the clear over a single OCR typo — whether or
+  // not a "CNP" label survived the photo.
+  const bare = scan("1960209025811");
+  assert.equal(bare.length, 1);
+  assert.equal(bare[0]!.category, "national_id");
   const labelled = scan("CNP 1960209025811");
   assert.equal(labelled.length, 1);
   assert.equal(labelled[0]!.category, "national_id");
+});
+
+test("redacts a label-free CNP through letter-for-digit OCR slips", () => {
+  // No "CNP" label in reach and the checksum broken, but the run still unscrambles
+  // to a structurally valid CNP. "19G0Z09025811" is 1960209025811 with 6->G, 2->Z.
+  const dets = scan("seria 19G0Z09025811 emis");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+});
+
+test("ignores a bare 13-digit run with no valid CNP date", () => {
+  // 13-digit timestamps/order ids land an out-of-range month or day (here 90/00
+  // and 45/67), so the label-free pass leaves them alone. This is what keeps the
+  // looser checksum-free rule from flagging arbitrary long numbers in logs.
+  assert.deepEqual(scan("seq 1709000000000 done"), []);
+  assert.deepEqual(scan("ref 1234567890123 ok"), []);
 });
 
 test("redacts a CNP glued to its label with a broken control digit", () => {

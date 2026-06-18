@@ -19,6 +19,30 @@ export interface PatternSpec {
 
 const digitsOnly = (s: string): string => s.replace(/\D/g, "");
 
+// Undo the digit-for-letter slips OCR makes on a photo, then drop anything left
+// (stray spaces, punctuation). Shared by the two CNP passes that read mangled
+// runs: O->0, I/l->1, Z->2, A->4, S->5, G->6, T->7, B->8, g/q->9.
+const unconfuseDigits = (s: string): string =>
+  s
+    .replace(/[OoQD]/g, "0").replace(/[Il]/g, "1").replace(/[Zz]/g, "2")
+    .replace(/A/g, "4").replace(/S/g, "5").replace(/G/g, "6")
+    .replace(/T/g, "7").replace(/[Bb]/g, "8").replace(/[gq]/g, "9")
+    .replace(/\D/g, "");
+
+// A CNP encodes the holder's sex/century, birth date and county before the
+// control digit: S YY MM DD JJ NNN C. Validating that embedded date and county
+// is far more robust on a photo than the control digit — a single misread digit
+// breaks the checksum, but the month, day and county still read true — while
+// staying precise: a random 13-digit run (a timestamp, an order id) almost
+// always lands an out-of-range month or day. County codes run 01-52.
+function cnpStructValid(d: string): boolean {
+  if (!/^[1-8]\d{12}$/.test(d)) return false;
+  const month = +d.slice(3, 5);
+  const day = +d.slice(5, 7);
+  const county = +d.slice(7, 9);
+  return month >= 1 && month <= 12 && day >= 1 && day <= 31 && county >= 1 && county <= 52;
+}
+
 function cardBrand(d: string): string {
   if (/^4\d{12,18}$/.test(d)) return "Visa card";
   if (/^(5[1-5]\d{14}|2(22[1-9]|2[3-9]\d|[3-6]\d\d|7[01]\d|720)\d{12})$/.test(d)) return "Mastercard";
@@ -114,13 +138,26 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     source: "(?<=\\bCNP[\\s.:|/-]{0,4})[\\dOoQDIlSBbZzAGTgq][\\dOoQDIlSBbZzAGTgq ]{11,15}",
     baseConfidence: 0.85,
     refine: (raw) => {
-      const d = raw
-        .replace(/[OoQD]/g, "0").replace(/[Il]/g, "1").replace(/[Zz]/g, "2")
-        .replace(/A/g, "4").replace(/S/g, "5").replace(/G/g, "6")
-        .replace(/T/g, "7").replace(/[Bb]/g, "8").replace(/[gq]/g, "9")
-        .replace(/\D/g, "");
+      const d = unconfuseDigits(raw);
       if (d.length < 12 || d.length > 16) return false;
       return { confidence: d.length === 13 && cnpValid(d) ? 0.97 : 0.85 };
+    } },
+
+  // The label-free pass: a 13-character run that reads as a CNP once the OCR
+  // look-alikes are undone, with a valid embedded birth date and county. This is
+  // the net under the other two — it catches the printed CNP when a misread both
+  // broke the control digit and mangled the "CNP" label (or pushed it out of
+  // reach), the one case where the strict and label passes both come up empty.
+  // The lookarounds keep it from starting mid-token or stealing the first 13
+  // digits of a 14+ digit card run. Contiguous on purpose: allowing spaces with
+  // no label to anchor it would let unrelated numbers glue into a false match.
+  { category: "national_id", label: "CNP (RO)", severity: "high",
+    source: "(?<![0-9A-Za-z<])[\\dOoQDIlSBbZzAGTgq]{13}(?![0-9A-Za-z<])",
+    baseConfidence: 0.5,
+    refine: (raw) => {
+      const d = unconfuseDigits(raw);
+      if (d.length !== 13 || !cnpStructValid(d)) return false;
+      return { confidence: cnpValid(d) ? 0.95 : 0.8 };
     } },
 
   // Tax ID (Romanian CUI/CIF): 2–10 digits with a control digit. A short number
