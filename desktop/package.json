@@ -14,6 +14,8 @@
   "dependencies": {
     "@shotshield/core": "*",
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "@vladmandic/face-api": "^1.7.15",
     "tesseract.js": "^7.0.0",
     "tesseract.js-core": "^7.0.0"

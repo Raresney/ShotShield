@@ -127,6 +127,30 @@ textarea:focus {
   white-space: nowrap;
 }
 
+/* ── Update banner ── */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--low) 35%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--low) 8%, var(--surface));
+  font-size: 13px;
+}
+.update-banner[hidden] {
+  display: none;
+}
+.update-text {
+  flex: 1;
+}
+.update-banner .btn {
+  flex: none;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
 /* ── Detection settings ── */
 .settings {
   margin: 0 0 16px;

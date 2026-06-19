@@ -5,6 +5,7 @@ import { orientedCanvas, loadImageEl } from "./image.ts";
 import { locate, paint, type Region } from "./redact.ts";
 import { downloadCanvas } from "./export.ts";
 import { loadSettings, renderSettings, scanConfig } from "./settings.ts";
+import { checkForUpdate, type PendingUpdate } from "./update.ts";
 
 const stage = document.querySelector<HTMLDivElement>("#stage")!;
 const stagePrompt = document.querySelector<HTMLDivElement>("#stagePrompt")!;
@@ -22,6 +23,7 @@ const drawHint = document.querySelector<HTMLParagraphElement>("#drawHint")!;
 const progress = document.querySelector<HTMLDivElement>("#progress")!;
 const progressBar = document.querySelector<HTMLDivElement>("#progressBar")!;
 const settingsBody = document.querySelector<HTMLDivElement>("#settingsBody")!;
+const updateBanner = document.querySelector<HTMLDivElement>("#updateBanner")!;
 
 // Detection settings (which categories run, the confidence floor), persisted.
 const settings = loadSettings();
@@ -508,3 +510,53 @@ window.addEventListener("paste", (e) => {
   const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith("image/"));
   if (item) handleFile(item.getAsFile());
 });
+
+// ── Updates ──
+function showUpdateBanner(update: PendingUpdate): void {
+  updateBanner.replaceChildren();
+
+  const text = document.createElement("span");
+  text.className = "update-text";
+  text.textContent = `ShotShield ${update.version} is available.`;
+
+  const action = document.createElement("button");
+  action.type = "button";
+  action.className = "btn btn-primary update-action";
+  action.textContent = "Update & restart";
+
+  const later = document.createElement("button");
+  later.type = "button";
+  later.className = "btn update-later";
+  later.textContent = "Later";
+  later.addEventListener("click", () => (updateBanner.hidden = true));
+
+  action.addEventListener("click", async () => {
+    action.disabled = true;
+    later.hidden = true;
+    text.textContent = `Downloading ShotShield ${update.version}…`;
+    try {
+      await update.install((downloaded, total) => {
+        text.textContent = total
+          ? `Downloading… ${Math.round((downloaded / total) * 100)}%`
+          : `Downloading… ${Math.round(downloaded / 1024)} KB`;
+      });
+      text.textContent = "Restarting…"; // the relaunch usually preempts this
+    } catch (err) {
+      console.error("Update failed", err);
+      text.textContent = "Update failed — download it from the releases page instead.";
+      action.disabled = false;
+      action.textContent = "Retry";
+      later.hidden = false;
+    }
+  });
+
+  updateBanner.append(text, action, later);
+  updateBanner.hidden = false;
+}
+
+// Check for a newer signed release on launch. Silent when there's nothing new or
+// the check can't run (offline, no release yet, or running outside the app).
+void (async () => {
+  const update = await checkForUpdate();
+  if (update) showUpdateBanner(update);
+})();
