@@ -234,12 +234,17 @@ button, input, textarea { font: inherit; }
   width: 108px;
   height: 108px;
   object-fit: contain;
+  image-rendering: -webkit-optimize-contrast;
+  filter: brightness(1.15) contrast(1.12) drop-shadow(0 2px 8px rgba(0,0,0,0.40));
 }
 
 .brand-logo-light { display: none; }
 
 :root[data-theme="light"] .brand-logo-dark { display: none; }
-:root[data-theme="light"] .brand-logo-light { display: block; }
+:root[data-theme="light"] .brand-logo-light {
+  display: block;
+  filter: brightness(0.92) contrast(1.18) drop-shadow(0 2px 8px rgba(19,32,42,0.22));
+}
 
 @keyframes title-shimmer {
   0%   { background-position: 200% center; }
