@@ -1,9 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 /* ══════════════════════════════════════════════════════
    SHOTSHIELD · PREMIUM UI SYSTEM
    Vibe: Ethereal Glass / Dark Matter
    ══════════════════════════════════════════════════════ */
+
+/* Type is served from the system font stack (see each font-family below).
+   ShotShield runs fully on-device, so we never pull webfonts from a remote
+   origin — that would both contradict the privacy promise and be blocked by
+   the production CSP (font-src/style-src 'self'), leaving text unstyled. */
 
 :root {
   color-scheme: dark;
