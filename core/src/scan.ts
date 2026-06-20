@@ -37,7 +37,15 @@ function compile(config?: ScanConfig): CompiledRule[] {
     });
   }
   if (enabled.custom !== false) {
-    for (const r of config?.customRules ?? []) rules.push(compileCustom(r));
+    for (const r of config?.customRules ?? []) {
+      try {
+        rules.push(compileCustom(r));
+      } catch (err) {
+        // A user-supplied pattern can be an invalid regex. Skip the bad rule
+        // rather than letting `new RegExp` throw and abort the whole scan.
+        console.warn(`ShotShield: skipping custom rule "${r.label}": ${String(err)}`);
+      }
+    }
   }
   return rules;
 }
