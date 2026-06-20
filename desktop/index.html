@@ -3,59 +3,170 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" />
     <link rel="stylesheet" href="/src/styles.css" />
     <title>ShotShield</title>
     <script type="module" src="/src/main.ts"></script>
   </head>
 
   <body>
-    <main>
-      <div id="updateBanner" class="update-banner" hidden></div>
+    <div class="noise-overlay" aria-hidden="true"></div>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <img class="brand-logo brand-logo-dark" src="/bullet-icon-dark.png" alt="" />
+            <img class="brand-logo brand-logo-light" src="/bullet-icon-light.png" alt="" />
+          </div>
+        </div>
 
-      <header>
-        <h1>ShotShield</h1>
-        <p class="tagline">Find sensitive data before you share it.</p>
+        <div class="topbar-center">
+          <h1 class="topbar-title">ShotShield</h1>
+          <p class="tagline">Redact sensitive data. Stay private. Export clean.</p>
+        </div>
+
+        <div class="topbar-pills">
+          <span class="status-pill status-pill-gold">Local-only</span>
+          <span class="status-pill status-pill-teal">Engine ready</span>
+          <span id="headerRiskPill" class="status-pill status-pill-teal">0 protected</span>
+          <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to light theme">
+            <span class="theme-toggle-track">
+              <span class="theme-toggle-thumb"></span>
+            </span>
+            <span id="themeToggleLabel" class="theme-toggle-label">Dark</span>
+          </button>
+        </div>
       </header>
 
-      <details class="settings">
-        <summary>Detection settings</summary>
-        <div id="settingsBody" class="settings-body"></div>
-      </details>
+      <div id="updateBanner" class="update-banner" hidden></div>
 
-      <div id="stage" class="stage" tabindex="0" role="button"
-           aria-label="Drop, paste, or choose an image to scan">
-        <div id="stagePrompt" class="stage-prompt">
-          <p class="stage-hint">Drop a screenshot, paste, or <span class="link">choose an image</span></p>
-          <p class="stage-sub">ID cards, bank cards, configs — scanned on your device, nothing uploaded.</p>
-        </div>
-        <canvas id="canvas" class="canvas" hidden></canvas>
-        <div id="drawbox" class="draw-box" hidden></div>
-        <div id="progress" class="progress" hidden><div id="progressBar" class="progress-bar"></div></div>
-        <input id="file" type="file" accept="image/*" hidden />
+      <div class="workspace">
+        <aside class="settings-rail">
+          <div class="panel-head">
+            <span class="panel-kicker">Detection</span>
+          </div>
+
+          <div class="settings-scroll">
+            <div id="settingsBody" class="settings-body"></div>
+
+            <section class="privacy-card">
+              <h2>On-device only</h2>
+              <p>OCR and detection run locally. Nothing leaves your machine.</p>
+            </section>
+          </div>
+        </aside>
+
+        <main class="main-column">
+          <section class="stage-section">
+            <div
+              id="stage"
+              class="stage"
+              tabindex="0"
+              role="button"
+              aria-label="Drop, paste, or choose an image to scan"
+            >
+              <div class="stage-chrome">
+                <div class="stage-meta">
+                  <span class="stage-dot"></span>
+                  <span>Workspace</span>
+                  <span id="workspaceMeta" class="workspace-meta"></span>
+                </div>
+                <div id="workspaceRegions" class="stage-stats"></div>
+              </div>
+
+              <div id="stagePrompt" class="stage-prompt">
+                <div class="stage-prompt-copy">
+                  <div class="stage-prompt-art" aria-hidden="true">
+                    <img class="stage-prompt-image stage-prompt-image-dark" src="/findings-dark.png" alt="" />
+                    <img class="stage-prompt-image stage-prompt-image-light" src="/findings-light.png" alt="" />
+                  </div>
+                  <p class="stage-hint">Drop a screenshot to scan</p>
+                  <p class="stage-sub">ID cards, bank cards, API keys, faces, addresses — all scanned on-device.</p>
+                  <div class="prompt-actions">
+                    <span class="prompt-button prompt-button-primary">Choose an image</span>
+                    <span class="prompt-button">Paste from clipboard</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="stage-canvas-wrap">
+                <canvas id="canvas" class="canvas" hidden></canvas>
+              </div>
+
+              <div id="drawbox" class="draw-box" hidden></div>
+              <div id="progress" class="progress" hidden><div id="progressBar" class="progress-bar"></div></div>
+              <input id="file" type="file" accept="image/*" hidden />
+            </div>
+
+            <p id="drawHint" class="draw-hint" hidden>
+              Drag on the image to manually redact a region.
+            </p>
+          </section>
+
+          <div class="stage-actions">
+            <button id="rotate" class="tool-btn" hidden>Rotate</button>
+            <button id="compare" class="tool-btn" hidden>Hold to compare</button>
+            <button id="clear" class="tool-btn" hidden>Clear</button>
+
+            <div class="stage-actions-spacer"></div>
+
+            <button id="copyClipboard" class="tool-btn secondary-export">Copy to clipboard</button>
+            <button id="export" class="tool-btn tool-btn-primary" hidden>Export redacted</button>
+          </div>
+
+          <details class="fallback">
+            <summary>Or scan pasted text</summary>
+            <div class="fallback-body">
+              <textarea
+                id="input"
+                spellcheck="false"
+                placeholder="Paste text to scan — an .env file, a log, a config..."
+              ></textarea>
+            </div>
+          </details>
+        </main>
+
+        <aside class="findings-panel">
+          <div class="findings-footer">
+            <section class="how-it-works-card" aria-labelledby="howItWorksTitle">
+              <p class="how-it-works-kicker">How it works</p>
+              <h3 id="howItWorksTitle">Local scan, review, redact, export.</h3>
+              <p class="how-it-works-copy">
+                Drop a screenshot, get instant on-device OCR and face detection, review findings, redact what you need, export clean.
+              </p>
+            </section>
+          </div>
+
+          <div class="panel-head">
+            <span class="panel-kicker">Findings</span>
+            <span id="findingsCount" class="panel-count">0</span>
+          </div>
+
+          <div class="severity-strip">
+            <span class="severity-chip severity-chip-critical"><strong id="criticalCount">0</strong> Critical</span>
+            <span class="severity-chip severity-chip-high"><strong id="highCount">0</strong> Sensitive</span>
+            <span class="severity-chip severity-chip-low"><strong id="lowCount">0</strong> Info</span>
+          </div>
+
+          <div class="findings-toolbar">
+            <p id="summary" class="summary"></p>
+          </div>
+
+          <div id="results" class="results"></div>
+        </aside>
       </div>
 
-      <p id="drawHint" class="draw-hint" hidden>
-        Drag on the image to redact an area by hand — a face, an address, anything the scan misses.
-      </p>
-
-      <div class="stage-actions">
-        <button id="rotate" class="btn" hidden>Rotate</button>
-        <button id="compare" class="btn" hidden>Hold to compare</button>
-        <button id="clear" class="btn" hidden>Clear</button>
-        <button id="export" class="btn btn-primary" hidden>Save redacted image</button>
-      </div>
-
-      <details class="fallback">
-        <summary>or paste text</summary>
-        <textarea
-          id="input"
-          spellcheck="false"
-          placeholder="Paste text to scan — an .env file, a log, a config…"
-        ></textarea>
-      </details>
-
-      <p id="summary" class="summary"></p>
-      <div id="results" class="results"></div>
-    </main>
+      <footer class="statusbar">
+        <span class="statusbar-engine">Engine — idle</span>
+        <span>·</span>
+        <span><span id="statusTotal">0</span> regions</span>
+        <span>·</span>
+        <span class="statusbar-protected"><span id="statusProtected">0</span> protected</span>
+        <span id="statusExposedWrap" hidden>· <span class="statusbar-exposed"><span id="statusExposed">0</span> exposed</span></span>
+        <span class="statusbar-right">On-device · zero telemetry</span>
+      </footer>
+    </div>
   </body>
 </html>
