@@ -1,4 +1,4 @@
-import { scan, type Detection } from "@shotshield/core";
+import { scan, type Detection, type Severity } from "@shotshield/core";
 import { ocr, ocrAutoOrient, type Box, type OcrWord, type ProgressFn } from "./ocr.ts";
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
@@ -24,9 +24,95 @@ const progress = document.querySelector<HTMLDivElement>("#progress")!;
 const progressBar = document.querySelector<HTMLDivElement>("#progressBar")!;
 const settingsBody = document.querySelector<HTMLDivElement>("#settingsBody")!;
 const updateBanner = document.querySelector<HTMLDivElement>("#updateBanner")!;
+const copyBtn = document.querySelector<HTMLButtonElement>("#copyClipboard")!;
+
+// Dashboard read-outs from the redesigned shell (header pill, findings counts,
+// status bar). These were rendered but never populated — wired up below.
+const headerRiskPill = document.querySelector<HTMLElement>("#headerRiskPill")!;
+const findingsCount = document.querySelector<HTMLElement>("#findingsCount")!;
+const criticalCount = document.querySelector<HTMLElement>("#criticalCount")!;
+const highCount = document.querySelector<HTMLElement>("#highCount")!;
+const lowCount = document.querySelector<HTMLElement>("#lowCount")!;
+const statusTotal = document.querySelector<HTMLElement>("#statusTotal")!;
+const statusProtected = document.querySelector<HTMLElement>("#statusProtected")!;
+const statusExposed = document.querySelector<HTMLElement>("#statusExposed")!;
+const statusExposedWrap = document.querySelector<HTMLElement>("#statusExposedWrap")!;
+const workspaceMeta = document.querySelector<HTMLElement>("#workspaceMeta")!;
+const workspaceRegions = document.querySelector<HTMLElement>("#workspaceRegions")!;
+const themeToggle = document.querySelector<HTMLButtonElement>("#themeToggle")!;
+const themeToggleLabel = document.querySelector<HTMLElement>("#themeToggleLabel")!;
 
 // Detection settings (which categories run, the confidence floor), persisted.
 const settings = loadSettings();
+
+// ── Theme ──
+// Dark by default (the design leads dark). The toggle flips to light by setting
+// data-theme on the root — the hook every CSS theme rule keys off — and the
+// choice is persisted so it survives a restart.
+type Theme = "dark" | "light";
+function applyTheme(t: Theme): void {
+  if (t === "light") document.documentElement.setAttribute("data-theme", "light");
+  else document.documentElement.removeAttribute("data-theme");
+  themeToggle.setAttribute("aria-pressed", String(t === "light"));
+  themeToggle.setAttribute("aria-label", `Switch to ${t === "light" ? "dark" : "light"} theme`);
+  themeToggleLabel.textContent = t === "light" ? "Light" : "Dark";
+}
+let theme: Theme = (() => {
+  try {
+    return localStorage.getItem("shotshield.theme") === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+})();
+applyTheme(theme);
+themeToggle.addEventListener("click", () => {
+  theme = theme === "light" ? "dark" : "light";
+  try {
+    localStorage.setItem("shotshield.theme", theme);
+  } catch {
+    /* storage unavailable (private mode, quota) — applies for this session only */
+  }
+  applyTheme(theme);
+});
+
+// ── Dashboard read-outs ──
+// Single place that fills the header pill, findings counts and status bar from a
+// list of severities plus the protected/exposed tallies. Medium folds into the
+// "Info" bucket, the only low-tier chip the redesigned strip exposes.
+function showDashboard(
+  severities: Severity[],
+  totalRegions: number,
+  protectedCount: number,
+  exposedCount: number,
+  meta: string,
+): void {
+  let critical = 0;
+  let high = 0;
+  let low = 0;
+  for (const s of severities) {
+    if (s === "critical") critical++;
+    else if (s === "high") high++;
+    else low++;
+  }
+  findingsCount.textContent = String(severities.length);
+  criticalCount.textContent = String(critical);
+  highCount.textContent = String(high);
+  lowCount.textContent = String(low);
+  statusTotal.textContent = String(totalRegions);
+  statusProtected.textContent = String(protectedCount);
+  statusExposed.textContent = String(exposedCount);
+  statusExposedWrap.hidden = exposedCount === 0;
+  headerRiskPill.textContent = `${protectedCount} protected`;
+  // Tint the header pill red while something sensitive is still uncovered.
+  headerRiskPill.classList.toggle("status-pill-critical", exposedCount > 0);
+  headerRiskPill.classList.toggle("status-pill-teal", exposedCount === 0);
+  workspaceMeta.textContent = meta;
+  workspaceRegions.textContent =
+    totalRegions > 0 ? `${totalRegions} ${totalRegions === 1 ? "region" : "regions"}` : "";
+}
+function resetDashboard(): void {
+  showDashboard([], 0, 0, 0, "");
+}
 
 function showProgress(fraction: number): void {
   progress.hidden = false;
@@ -37,8 +123,11 @@ function hideProgress(): void {
   progressBar.style.width = "0%";
 }
 
-// Accent used to outline a finding's region when its row is hovered.
-const accent = getComputedStyle(document.documentElement).getPropertyValue("--low").trim() || "#2563eb";
+// Accent used to outline a finding's region when its row is hovered. Read live
+// so it follows the active theme (the toggle swaps the --low custom property).
+function accentColor(): string {
+  return getComputedStyle(document.documentElement).getPropertyValue("--low").trim() || "#5de8e7";
+}
 let hovered: Box[] | null = null;
 
 // Don't echo full secrets back in the list — show just enough to recognise.
@@ -73,11 +162,20 @@ function scanText(): void {
   if (!input.value.trim()) {
     summary.textContent = "";
     results.replaceChildren();
+    resetDashboard();
     return;
   }
   const dets = scan(input.value, scanConfig(settings));
   results.replaceChildren(...dets.map(row));
   summary.textContent = dets.length === 0 ? "Nothing sensitive found." : `${dets.length} found`;
+  // Pasted text is only flagged, never covered — count every hit as exposed.
+  showDashboard(
+    dets.map((d) => d.severity),
+    dets.length,
+    0,
+    dets.length,
+    dets.length > 0 ? "Pasted text" : "",
+  );
 }
 
 input.addEventListener("input", scanText);
@@ -196,6 +294,7 @@ function recomputeRegions(): void {
   paint(canvas, currentImg, regions, manualBoxes);
   renderRegions();
   exportBtn.hidden = false;
+  copyBtn.hidden = false;
 }
 
 // Wrap a detected face as a redaction region, so it lists, toggles, paints and
@@ -234,6 +333,18 @@ function renderRegions(): void {
 
   // Compare only makes sense once something is actually covered.
   compareBtn.hidden = !(regions.some((r) => r.hidden) || manualBoxes.length > 0);
+
+  // Manual boxes count toward what's protected, but only auto detections feed the
+  // findings/severity read-outs — a hand-drawn box isn't a "finding".
+  const protectedCount = regions.filter((r) => r.hidden).length + manualBoxes.length;
+  const exposedCount = regions.filter((r) => !r.hidden).length;
+  showDashboard(
+    regions.map((r) => r.detection.severity),
+    regions.length + manualBoxes.length,
+    protectedCount,
+    exposedCount,
+    currentImg ? `${currentImg.naturalWidth}×${currentImg.naturalHeight}` : "",
+  );
 }
 
 // A finding row in image mode is a toggle: click to cover/uncover its region.
@@ -294,7 +405,7 @@ function repaint(): void {
   if (hovered) {
     const ctx = canvas.getContext("2d")!;
     ctx.save();
-    ctx.strokeStyle = accent;
+    ctx.strokeStyle = accentColor();
     ctx.lineWidth = Math.max(2, canvas.width * 0.004);
     for (const b of hovered) ctx.strokeRect(b.x, b.y, b.w, b.h);
     ctx.restore();
@@ -462,12 +573,14 @@ function clearImage(): void {
   rotateBtn.hidden = true;
   compareBtn.hidden = true;
   exportBtn.hidden = true;
+  copyBtn.hidden = true;
   drawHint.hidden = true;
   hideProgress();
   hovered = null;
   stage.classList.remove("has-image");
   summary.textContent = "";
   results.replaceChildren();
+  resetDashboard();
 }
 
 const canPick = () => !stage.classList.contains("has-image");
@@ -487,6 +600,30 @@ fileInput.addEventListener("change", () => {
 });
 clearBtn.addEventListener("click", clearImage);
 exportBtn.addEventListener("click", () => downloadCanvas(canvas, "shotshield-redacted.png"));
+
+// Briefly swap a button's label to confirm an action, then restore it.
+function flash(btn: HTMLButtonElement, msg: string): void {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = msg;
+  setTimeout(() => {
+    btn.textContent = original;
+    btn.disabled = false;
+  }, 1200);
+}
+
+// Copy the redacted canvas (boxes already baked in) to the clipboard as a PNG.
+copyBtn.addEventListener("click", async () => {
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) return;
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    flash(copyBtn, "Copied");
+  } catch (err) {
+    console.error("Clipboard copy failed", err);
+    flash(copyBtn, "Copy failed");
+  }
+});
 rotateBtn.addEventListener("click", () => {
   if (!sourceImg) return;
   // Manual rotate is a deliberate 90° nudge — don't re-run the auto search.

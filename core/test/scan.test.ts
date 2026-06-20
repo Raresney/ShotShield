@@ -31,6 +31,25 @@ test("supports user-defined custom rules", () => {
   assert.equal(dets[0]!.label, "ACME ticket");
 });
 
+test("an invalid custom rule is skipped, not fatal to the scan", () => {
+  // A broken user pattern must not throw and abort the whole scan: the built-in
+  // detectors and any valid custom rules still run.
+  const prevWarn = console.warn;
+  console.warn = () => {}; // silence the expected skip notice
+  try {
+    const dets = scan("mail alice@example.com ref ACME-1234", {
+      customRules: [
+        { id: "bad", label: "broken", pattern: "(" }, // unbalanced group
+        { id: "ok", label: "ACME ticket", pattern: "ACME-\\d{4}" },
+      ],
+    });
+    const cats = dets.map((d) => d.category).sort();
+    assert.deepEqual(cats, ["custom", "email"]);
+  } finally {
+    console.warn = prevWarn;
+  }
+});
+
 test("detects common API keys and tokens", () => {
   const keys = [
     "ghp_1A2b3C4d5E6f7G8h9I0jK1lM2nO3pQ4rS5tU",

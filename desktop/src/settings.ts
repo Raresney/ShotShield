@@ -98,9 +98,15 @@ export function renderSettings(body: HTMLElement, s: Settings, onChange: () => v
 
   const row = document.createElement("label");
   row.className = "settings-slider";
-  const text = document.createElement("span");
-  const setText = () => (text.textContent = `Minimum confidence: ${Math.round(s.minConfidence * 100)}%`);
-  setText();
+  const top = document.createElement("div");
+  top.className = "settings-slider-top";
+  const caption = document.createElement("span");
+  caption.textContent = "Minimum confidence";
+  const value = document.createElement("span");
+  value.className = "settings-slider-value";
+  const setValue = () => (value.textContent = `${Math.round(s.minConfidence * 100)}%`);
+  setValue();
+  top.append(caption, value);
   const slider = document.createElement("input");
   slider.type = "range";
   slider.min = "0";
@@ -109,23 +115,33 @@ export function renderSettings(body: HTMLElement, s: Settings, onChange: () => v
   slider.value = String(Math.round(s.minConfidence * 100));
   slider.addEventListener("input", () => {
     s.minConfidence = Number(slider.value) / 100;
-    setText();
+    setValue();
     save(s);
     onChange();
   });
-  row.append(text, slider);
+  row.append(top, slider);
   body.append(row);
 }
 
+// Markup matches the .settings-item switch styling: a label on the left and a
+// visually-hidden checkbox immediately followed by the .settings-switch track
+// the CSS animates (input:checked + .settings-switch).
 function toggle(label: string, checked: boolean, onToggle: (on: boolean) => void): HTMLElement {
   const el = document.createElement("label");
   el.className = "settings-item";
+
+  const text = document.createElement("span");
+  text.className = "settings-label";
+  text.textContent = label;
+
   const box = document.createElement("input");
   box.type = "checkbox";
   box.checked = checked;
   box.addEventListener("change", () => onToggle(box.checked));
-  const span = document.createElement("span");
-  span.textContent = label;
-  el.append(box, span);
+
+  const track = document.createElement("span");
+  track.className = "settings-switch";
+
+  el.append(text, box, track);
   return el;
 }

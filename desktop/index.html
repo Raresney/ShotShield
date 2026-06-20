@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+    <!-- No remote webfonts: ShotShield is fully on-device, and the production
+         CSP (font-src/style-src 'self') blocks cross-origin font loads anyway.
+         Typography falls back to the system stack defined in styles.css. -->
     <link rel="stylesheet" href="/src/styles.css" />
     <title>ShotShield</title>
     <script type="module" src="/src/main.ts"></script>
@@ -112,7 +112,7 @@
 
             <div class="stage-actions-spacer"></div>
 
-            <button id="copyClipboard" class="tool-btn secondary-export">Copy to clipboard</button>
+            <button id="copyClipboard" class="tool-btn secondary-export" hidden>Copy to clipboard</button>
             <button id="export" class="tool-btn tool-btn-primary" hidden>Export redacted</button>
           </div>
 
