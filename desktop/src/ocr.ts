@@ -47,7 +47,7 @@ function acquire(): Promise<() => void> {
 }
 
 // One worker, created on first use and reused. Every asset is local
-// (see scripts/copy-tesseract.mjs) — nothing is fetched at runtime.
+// (see scripts/copy-vendor.mjs) — nothing is fetched at runtime.
 function getWorker() {
   if (!workerPromise) {
     // English + Romanian: ID cards carry diacritics and Romanian field labels
