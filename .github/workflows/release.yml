@@ -11,9 +11,31 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      # Keep building the other platforms even if one fails, so a Linux hiccup
+      # never blocks the Windows release (and its updater manifest).
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+          - platform: ubuntu-22.04
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+
+      # Tauri's Linux build needs the WebKitGTK stack and packaging tools.
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libxdo-dev \
+            libssl-dev
 
       - uses: actions/setup-node@v4
         with:
@@ -28,9 +50,10 @@ jobs:
 
       - run: npm ci
 
-      # On a tag push this publishes a release with the installer attached.
-      # A manual run leaves tagName empty, so it just builds and proves the
-      # pipeline works without cutting a release.
+      # On a tag push this publishes (or appends to) the release with this
+      # platform's installer attached; tauri-action merges each matrix job into
+      # one latest.json for the updater. A manual run leaves tagName empty, so it
+      # only builds and proves the pipeline works without cutting a release.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
