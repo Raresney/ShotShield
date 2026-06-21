@@ -66,4 +66,6 @@ The core is the dependable part: every detector above is in place and tested. Th
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[AGPL-3.0](LICENSE). Copyright (c) 2026 Rareș (@Raresney).
+
+You may use, study and modify the code, but any distributed or network-hosted derivative must also be open-sourced under the AGPL-3.0.
