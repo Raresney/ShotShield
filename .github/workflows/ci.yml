@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Detection engine: behaviour tests + type check.
+      - run: npm test -w core
+      - run: npm run typecheck -w core
+
+      # Front end: type check + production bundle (no Rust/Tauri needed for this).
+      - run: npm run build -w desktop
