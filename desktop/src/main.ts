@@ -383,6 +383,9 @@ function regionRow(region: Region, index: number): HTMLElement {
   el.addEventListener("click", () => toggle(index));
   el.addEventListener("mouseenter", () => setHover(region.boxes));
   el.addEventListener("mouseleave", () => setHover(null));
+  // Keyboard users get the same region outline when they tab onto the row.
+  el.addEventListener("focus", () => setHover(region.boxes));
+  el.addEventListener("blur", () => setHover(null));
   return el;
 }
 
@@ -464,6 +467,8 @@ function manualRow(box: Box, index: number): HTMLElement {
   });
   el.addEventListener("mouseenter", () => setHover([box]));
   el.addEventListener("mouseleave", () => setHover(null));
+  el.addEventListener("focus", () => setHover([box]));
+  el.addEventListener("blur", () => setHover(null));
   return el;
 }
 
