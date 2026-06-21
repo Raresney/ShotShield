@@ -13,7 +13,7 @@
     "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "devDependencies": {
     "typescript": "^5.7.0"
   }
