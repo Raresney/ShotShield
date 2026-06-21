@@ -9,6 +9,7 @@
     "prebuild": "node scripts/copy-vendor.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -22,7 +23,9 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "happy-dom": "^15",
     "typescript": "~5.6.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "vitest": "^2"
   }
 }

@@ -22,5 +22,7 @@ jobs:
       - run: npm test -w core
       - run: npm run typecheck -w core
 
-      # Front end: type check + production bundle (no Rust/Tauri needed for this).
+      # Front end: unit tests, then type check + production bundle (no Rust/Tauri
+      # needed for this).
+      - run: npm test -w desktop
       - run: npm run build -w desktop

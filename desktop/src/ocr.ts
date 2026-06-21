@@ -77,7 +77,7 @@ function getWorker() {
 // only short, shaky fragments, so counting these separates an upright read from
 // a sideways one far more reliably than a raw confidence count — which Tesseract
 // happily hands to the garbage tokens it reads off sideways text.
-function isRealWord(text: string, confidence: number): boolean {
+export function isRealWord(text: string, confidence: number): boolean {
   return confidence >= 60 && /^\p{L}{4,}$/u.test(text);
 }
 
