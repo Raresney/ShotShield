@@ -12,6 +12,8 @@ Find sensitive data in a screenshot and cover it before you share the image. Run
 ![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri-24C8DB?logo=tauri&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 
+<img src="docs/screenshot.png" alt="ShotShield scanning a screenshot, with detection categories on the left and a redacted sample in the workspace" width="900" />
+
 </div>
 
 You paste a screenshot into a chat or an issue, and only later notice it had an API key in the corner, or an IBAN, or your own face. ShotShield scans the picture locally, marks what it finds, and lets you paint over it. The redaction is baked into the file you export, not just drawn on top for show.
