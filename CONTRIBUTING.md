@@ -29,5 +29,6 @@ npm run build -w desktop
 
 ## License
 
-By contributing, you agree that your work is licensed under the project's
-[AGPL-3.0](LICENSE).
+ShotShield is proprietary software (see [LICENSE](LICENSE)). By contributing,
+you assign to the copyright holder all rights in your contribution, so it can
+be included under the project's proprietary license.
