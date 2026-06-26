@@ -6,7 +6,7 @@
 
 Find sensitive data in a screenshot and cover it before you share the image. Runs on your machine, and nothing is uploaded.
 
-[![License](https://img.shields.io/github/license/Raresney/ShotShield?color=blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-proprietary-red)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/Raresney/ShotShield?sort=semver)](https://github.com/Raresney/ShotShield/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Raresney/ShotShield/total)](https://github.com/Raresney/ShotShield/releases)
 ![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri-24C8DB?logo=tauri&logoColor=white)
@@ -68,6 +68,6 @@ The core is the dependable part: every detector above is in place and tested. Th
 
 ## License
 
-[AGPL-3.0](LICENSE). Copyright (c) 2026 Rareș (@Raresney).
+Proprietary. Copyright (c) 2026 Rareș (@Raresney). All rights reserved.
 
-You may use, study and modify the code, but any distributed or network-hosted derivative must also be open-sourced under the AGPL-3.0.
+The source is public so you can read it, but it is not open-source: see the [LICENSE](LICENSE). No use, copying, modification, or distribution is permitted without prior written permission. Bundled third-party components keep their own licenses.
