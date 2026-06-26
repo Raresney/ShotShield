@@ -160,6 +160,25 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
       return { confidence: cnpValid(d) ? 0.95 : 0.8 };
     } },
 
+  // The split pass: a buletin prints the CNP as one solid 13-digit block, but a
+  // photo's kerning gap or a hologram crossing the digits makes OCR read it as
+  // two word-boxes — so the rebuilt text carries a space the contiguous passes
+  // above can't cross ("5050218 226798"), and the label pass misses it when the
+  // "CNP" caption wasn't read right next to the number. Stitch two adjacent runs
+  // back together and accept them only if they join into exactly 13 digits with a
+  // valid CNP date and county. The "at least 7 real digits" floor keeps two
+  // ordinary words made of look-alike letters from gluing into a false hit; the
+  // span covers the gap, so both word boxes get painted.
+  { category: "national_id", label: "CNP (RO)", severity: "high",
+    source: "(?<![0-9A-Za-z<])[\\dOoQDIlSBbZzAGTgq]{2,12} [\\dOoQDIlSBbZzAGTgq]{2,12}(?![0-9A-Za-z<])",
+    baseConfidence: 0.5,
+    refine: (raw) => {
+      if ((raw.match(/\d/g) ?? []).length < 7) return false;
+      const d = unconfuseDigits(raw);
+      if (d.length !== 13 || !cnpStructValid(d)) return false;
+      return { confidence: cnpValid(d) ? 0.9 : 0.8 };
+    } },
+
   // Tax ID (Romanian CUI/CIF): 2–10 digits with a control digit. A short number
   // clears the checksum ~9% of the time, so the bare value isn't enough — anchor
   // on a RO fiscal prefix or a CUI/CIF/"cod fiscal" label, then let the checksum
