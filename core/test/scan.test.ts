@@ -206,6 +206,31 @@ test("does not redact a short number after the letters CNP", () => {
   assert.deepEqual(scan("CNP 1234"), []);
 });
 
+test("redacts a label-free CNP that OCR split into two word boxes", () => {
+  // A solid 13-digit CNP on a buletin, split by a kerning gap into two OCR boxes
+  // -> "1960209 025813" in the rebuilt text. No "CNP" label survived next to it,
+  // so the label pass can't help and the contiguous passes can't cross the space.
+  const dets = scan("identitate 1960209 025813 valabil");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+  // The span covers the gap, so locate paints both word boxes, not just one half.
+  assert.equal(dets[0]!.text, "1960209 025813");
+});
+
+test("redacts a split CNP even when a misread broke the control digit", () => {
+  // "1960209 025811": split *and* one digit flipped. The date and county still
+  // read true, so the structural check keeps it covered though the checksum fails.
+  const dets = scan("emis 1960209 025811 ro");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+});
+
+test("ignores two adjacent numbers that don't join into a valid CNP", () => {
+  // 13 digits across the gap, but the embedded month (45) is out of range — so
+  // ordinary number pairs in logs and forms aren't glued into a false CNP.
+  assert.deepEqual(scan("comanda 12345 67890123 livrata"), []);
+});
+
 test("detects the name line of an ID machine-readable zone", () => {
   // surname<<given-names, padded with `<` — a TD1/TD3 MRZ name line.
   const dets = scan("POPESCU<<ION<<<<<<<<<<<<<<<<<<");
