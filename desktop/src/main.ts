@@ -195,6 +195,11 @@ let currentImg: HTMLImageElement | null = null;
 let sourceImg: HTMLImageElement | null = null; // the image as shown (post-rotation), for re-rotating
 let regions: Region[] = [];
 let manualBoxes: Box[] = []; // hand-drawn redaction rectangles, in image-pixel space
+// Undo/redo history for the manual boxes: each entry is a full snapshot of the
+// list. Adding, removing or Delete-ing a box pushes the prior state here first,
+// so Ctrl+Z / Ctrl+Y step through them. Both are reset when the image changes.
+let undoStack: Box[][] = [];
+let redoStack: Box[][] = [];
 // The last OCR pass, cached so a settings change can re-derive findings without
 // reading the image again. Detected faces are cached the same way.
 let lastOcr: { text: string; words: OcrWord[] } | null = null;
@@ -401,6 +406,40 @@ function toggle(index: number): void {
 // face, an address, a signature. Boxes are stored in image-pixel space so they
 // survive the canvas being scaled to fit, and painted onto the canvas itself so
 // the saved PNG carries them.
+// Snapshot the manual boxes before a mutation so it can be undone. Clearing the
+// redo stack on a fresh edit is standard undo semantics: the new action becomes
+// the tip, and the abandoned redo branch is dropped.
+function pushManualHistory(): void {
+  undoStack.push(manualBoxes.map((b) => ({ ...b })));
+  redoStack = [];
+}
+function undoManual(): void {
+  const prev = undoStack.pop();
+  if (!prev) return;
+  redoStack.push(manualBoxes.map((b) => ({ ...b })));
+  manualBoxes = prev;
+  repaint();
+  renderRegions();
+}
+function redoManual(): void {
+  const next = redoStack.pop();
+  if (!next) return;
+  undoStack.push(manualBoxes.map((b) => ({ ...b })));
+  manualBoxes = next;
+  repaint();
+  renderRegions();
+}
+
+// Cover or uncover every detected region at once (Space). While anything is
+// still visible, hide it all; once everything's hidden, the next press reveals it.
+function toggleAllRegions(): void {
+  if (!currentImg || regions.length === 0) return;
+  const anyVisible = regions.some((r) => !r.hidden);
+  for (const r of regions) r.hidden = anyVisible;
+  repaint();
+  renderRegions();
+}
+
 function repaint(): void {
   if (!currentImg) return;
   paint(canvas, currentImg, regions, manualBoxes);
@@ -460,6 +499,7 @@ function manualRow(box: Box, index: number): HTMLElement {
 
   el.append(dot, label, size, pill);
   el.addEventListener("click", () => {
+    pushManualHistory();
     manualBoxes.splice(index, 1);
     repaint();
     renderRegions();
@@ -516,6 +556,7 @@ canvas.addEventListener("pointerup", (e) => {
   // zero-size canvas rect) fails the test instead of slipping through, the way
   // `w < 6` would.
   if (!(w >= 6 && h >= 6)) return;
+  pushManualHistory();
   manualBoxes.push({ x, y, w, h });
   repaint();
   renderRegions();
@@ -544,6 +585,8 @@ function loadImage(src: string, opts: { autoOrient: boolean }, token: number): v
       // drawing stays disabled until this load's OCR pass finishes.
       currentImg = null;
       manualBoxes = [];
+      undoStack = [];
+      redoStack = [];
       displayImage(img);
       void scanImage(img, token, opts);
     })
@@ -568,6 +611,8 @@ function clearImage(): void {
   sourceImg = null;
   regions = [];
   manualBoxes = [];
+  undoStack = [];
+  redoStack = [];
   lastOcr = null;
   lastFaces = [];
   canvas.hidden = true;
@@ -650,6 +695,42 @@ stage.addEventListener("drop", (e) => {
 window.addEventListener("paste", (e) => {
   const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith("image/"));
   if (item) handleFile(item.getAsFile());
+});
+
+// ── Keyboard shortcuts ──
+// Space toggles every region, Ctrl/Cmd+Z and Ctrl+Shift+Z / Ctrl+Y undo and redo
+// the manual boxes, Ctrl/Cmd+S exports, Delete drops the last manual box. All are
+// suppressed while the pasted-text box has focus so normal typing is untouched.
+function inEditable(t: EventTarget | null): boolean {
+  return t instanceof HTMLTextAreaElement || t instanceof HTMLInputElement;
+}
+window.addEventListener("keydown", (e) => {
+  if (inEditable(e.target)) return;
+  const mod = e.ctrlKey || e.metaKey;
+
+  if (mod && (e.key === "z" || e.key === "Z")) {
+    e.preventDefault();
+    if (e.shiftKey) redoManual();
+    else undoManual();
+  } else if (mod && (e.key === "y" || e.key === "Y")) {
+    e.preventDefault();
+    redoManual();
+  } else if (mod && (e.key === "s" || e.key === "S")) {
+    e.preventDefault();
+    if (!exportBtn.hidden) downloadCanvas(canvas, "shotshield-redacted.png");
+  } else if (e.key === " " && !mod && !(e.target instanceof HTMLButtonElement)) {
+    // Don't steal Space from a focused button (a finding row toggles itself).
+    if (!currentImg || regions.length === 0) return;
+    e.preventDefault();
+    toggleAllRegions();
+  } else if ((e.key === "Delete" || e.key === "Backspace") && !mod) {
+    if (!manualBoxes.length) return;
+    e.preventDefault();
+    pushManualHistory();
+    manualBoxes.pop();
+    repaint();
+    renderRegions();
+  }
 });
 
 // ── Updates ──

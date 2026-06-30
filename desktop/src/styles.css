@@ -1142,6 +1142,12 @@ button, input, textarea { font: inherit; }
 
 .prompt-button:active { transform: scale(0.98) translateY(0); }
 
+.prompt-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
 .prompt-button-primary {
   border-color: rgba(93, 232, 231, 0.36);
   background: linear-gradient(135deg, rgba(93,232,231,0.96), rgba(130,240,230,0.90));
