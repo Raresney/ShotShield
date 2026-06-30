@@ -260,7 +260,6 @@ async function scanImage(
 
   currentImg = working;
   lastOcr = { text, words };
-  console.log("OCR done:", { chars: text.length, words: words.length });
 
   // Faces are best-effort and detected once per image, then cached: a model-load
   // failure must not drop the text findings, and toggling the Faces setting later
