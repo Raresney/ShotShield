@@ -194,8 +194,13 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // `<` filler — which ordinary prose and code (lowercase, `>`, `/`) never make.
   // It packs name, document number, nationality and birth date, so the whole run
   // is critical. (Reading the `<` filler off a photo needs a clean, upright scan.)
+  // Bounded to 90 chars each side (a single MRZ line is ≤44; the longest format
+  // is two of them, never on one line since OCR keeps a newline between rows that
+  // `[A-Z0-9<]` can't cross). The bound is what makes this safe: an unbounded `*`
+  // before `<<` greedily eats to end-of-text then backtracks to find the `<<`,
+  // which on a long uppercase blob costs O(n) per start position — O(n²) overall.
   { category: "mrz", label: "ID machine-readable zone", severity: "critical",
-    source: "[A-Z0-9<]*<<[A-Z0-9<]*", baseConfidence: 0.5,
+    source: "[A-Z0-9<]{0,90}<<[A-Z0-9<]{0,90}", baseConfidence: 0.5,
     refine: (raw) => {
       if (raw.length < 10) return false;
       const fillers = (raw.match(/</g) ?? []).length;
@@ -227,8 +232,16 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
       /^(?:NUME|PRENUME|NOM|PR[EÉ]NOM|SURNAME|LAST|FIRST|NAME)$/.test(raw) ? false : { confidence: 0.6 } },
 
   // ── Email ─────────────────────────────────────────────────────────────────
+  // Every quantifier is bounded to a real-world maximum (local-part ≤64, label
+  // ≤63, ≤10 labels, TLD ≤24 per RFC), and the domain is dot-free labels rather
+  // than one `[A-Za-z0-9.-]+\.` run. Both matter for safety: unbounded `+` runs
+  // let a long dotted input backtrack across the whole string (O(n²) on a crafted
+  // OCR blob), and the single-run domain lets the class `.` and the literal `\.`
+  // match the same char. Bounding caps the work per start position, keeping the
+  // global scan linear; no real address is excluded, and malformed domains like
+  // `a..b` are rejected for free.
   { category: "email", label: "Email address", severity: "medium",
-    source: "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,24}", baseConfidence: 0.9 },
+    source: "[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9-]{1,63}\\.){1,10}[A-Za-z]{2,24}", baseConfidence: 0.9 },
 
   // ── Phone numbers ───────────────────────────────────────────────────────────
   // Two precise shapes rather than one greedy run, since phone detection is
