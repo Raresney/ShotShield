@@ -35,6 +35,17 @@ The engine reads the text in an image with OCR, then runs it through a table of 
 
 Every category has an on/off switch, and you can add your own regex rules on top.
 
+## Using it
+
+Drop a screenshot onto the window, paste one with Ctrl+V, or pick a file. The scan runs, the findings show up in the list, and anything sensitive is covered right away. Click a finding to uncover or re-cover it, or drag a box on the image to hide something the scan missed, like a face or a home address. Export writes the redacted copy, with the boxes baked into the pixels.
+
+A few keys speed up the loop:
+
+- `Space` covers or uncovers every finding at once
+- `Ctrl+Z` and `Ctrl+Y` undo and redo a hand-drawn box
+- `Ctrl+S` exports the redacted image
+- `Delete` removes the last box you drew
+
 ## Privacy
 
 The image stays on your computer. The OCR (tesseract.js) and the face model (face-api) are bundled into the app and run offline, so there's no account to create and nowhere for the picture to be sent. The build also ships a Content Security Policy that blocks outbound requests, which stops a stray dependency from phoning home.
@@ -49,7 +60,7 @@ It's an npm workspace with two halves.
 
 ## Install
 
-Download the latest Windows installer from the [releases page](https://github.com/Raresney/ShotShield/releases/latest), run it, and you're set. The build isn't code-signed yet, so Windows SmartScreen may warn you on first launch. Click "More info" then "Run anyway".
+Grab the latest build for your platform from the [releases page](https://github.com/Raresney/ShotShield/releases/latest). Windows ships an `.exe` and an `.msi`; Linux ships an AppImage, a `.deb` and an `.rpm`. Run it and you're set. The build isn't code-signed yet, so Windows SmartScreen may warn you on first launch. Click "More info" then "Run anyway". The app checks for updates on its own and can install them in place.
 
 ## Build from source
 
