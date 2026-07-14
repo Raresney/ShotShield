@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { locate } from "../src/redact.ts";
+import { locate, mergeRegions, needsSecondLook, type Region } from "../src/redact.ts";
 import type { Detection } from "@shotshield/core";
 import type { OcrWord } from "../src/ocr.ts";
 
@@ -43,5 +43,67 @@ describe("locate", () => {
 
   it("returns no boxes when nothing overlaps", () => {
     expect(locate([det(30, 40)], words)[0]!.boxes).toHaveLength(0);
+  });
+});
+
+const region = (
+  category: Detection["category"],
+  x: number,
+  y: number,
+  w = 100,
+  h = 20,
+): Region => ({
+  detection: det(0, 5, { category }),
+  hidden: true,
+  boxes: [{ x, y, w, h }],
+});
+
+describe("mergeRegions", () => {
+  it("drops a second-pass hit of the same category on the same spot", () => {
+    const base = [region("national_id", 100, 200)];
+    // The retry re-read the same CNP with a slightly shifted box.
+    const merged = mergeRegions(base, [region("national_id", 110, 205)]);
+    expect(merged).toHaveLength(1);
+  });
+
+  it("keeps a second-pass hit the first pass missed entirely", () => {
+    const base = [region("mrz", 0, 400)];
+    const merged = mergeRegions(base, [region("national_id", 100, 200)]);
+    expect(merged).toHaveLength(2);
+  });
+
+  it("keeps same-category hits at different spots", () => {
+    const merged = mergeRegions([region("email", 0, 0)], [region("email", 500, 500)]);
+    expect(merged).toHaveLength(2);
+  });
+
+  it("keeps overlapping hits of different categories", () => {
+    // A face box crossing a text field is two real findings, not a duplicate.
+    const merged = mergeRegions([region("face", 90, 190, 200, 200)], [region("national_id", 100, 200)]);
+    expect(merged).toHaveLength(2);
+  });
+});
+
+describe("needsSecondLook", () => {
+  const cnp = det(0, 13, { category: "national_id" });
+  const seria = det(20, 38, { category: "id_document" });
+
+  it("fires when the text reads as a Romanian ID but no CNP was found", () => {
+    expect(needsSecondLook([], "CARTE DE IDENTITATE ROMANIA", true)).toBe(true);
+    expect(needsSecondLook([], "IDROU1870709<<080019", true)).toBe(true); // MRZ carries ROU
+    expect(needsSecondLook([seria], "seria RK nr 123456", true)).toBe(true);
+  });
+
+  it("stays quiet once a CNP was detected", () => {
+    expect(needsSecondLook([cnp], "CNP 1960209025813 ROMANIA", true)).toBe(false);
+  });
+
+  it("stays quiet on ordinary screenshots and foreign documents", () => {
+    expect(needsSecondLook([], "npm ERR! code E404", true)).toBe(false);
+    expect(needsSecondLook([det(0, 30, { category: "mrz" })], "P<DEUMUSTERMANN<<ERIKA", true)).toBe(false);
+  });
+
+  it("stays quiet when the CNP category is disabled", () => {
+    expect(needsSecondLook([], "CNP ROMANIA", false)).toBe(false);
   });
 });

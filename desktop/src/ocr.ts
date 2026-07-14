@@ -1,5 +1,5 @@
 import { createWorker } from "tesseract.js";
-import { orientedCanvas, preprocessForOcr } from "./image.ts";
+import { orientedCanvas, preprocessForOcr, type OcrLook } from "./image.ts";
 
 export interface Box {
   x: number;
@@ -93,8 +93,9 @@ interface Scored extends OcrResult {
 async function recognize(
   source: HTMLImageElement | HTMLCanvasElement,
   enhance = true,
+  look: OcrLook = "first",
 ): Promise<Scored> {
-  const prepared = enhance ? preprocessForOcr(source) : null;
+  const prepared = enhance ? preprocessForOcr(source, look) : null;
   const input = prepared ? prepared.canvas : source;
   const scale = prepared ? prepared.scale : 1;
 
@@ -140,6 +141,27 @@ export async function ocr(image: HTMLImageElement, progress?: ProgressFn): Promi
   phase = "reading";
   try {
     const { text, words } = await recognize(image);
+    return { text, words };
+  } finally {
+    onProgress = null;
+    release();
+  }
+}
+
+/**
+ * The retry read: same image, deliberately different render scale (see
+ * preprocessForOcr). Run when the first pass looked like an ID but missed the
+ * CNP — the field most often lost to a marginal, scale-dependent read.
+ */
+export async function ocrSecondLook(
+  image: HTMLImageElement,
+  progress?: ProgressFn,
+): Promise<OcrResult> {
+  const release = await acquire();
+  onProgress = progress ?? null;
+  phase = "reading";
+  try {
+    const { text, words } = await recognize(image, true, "second");
     return { text, words };
   } finally {
     onProgress = null;

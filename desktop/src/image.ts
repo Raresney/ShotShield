@@ -42,22 +42,35 @@ export function orientedCanvas(src: Source, turns: number, maxDim = Infinity): H
   return canvas;
 }
 
+/** Which OCR render to prepare: the normal pass, or the second-look retry. */
+export type OcrLook = "first" | "second";
+
 /**
  * Prepare an image for OCR. Phone photos of ID cards are noisy and their text is
  * small, so Tesseract often misreads a digit — and a single wrong digit fails the
  * CNP/IBAN checksum, silently dropping the field. A grayscale + percentile
  * contrast stretch and a modest upscale of small inputs let those digits resolve.
  *
+ * Tesseract's read is scale-sensitive: the same field can come through at one
+ * render size and vanish at another. The "second" look renders deliberately
+ * differently from the first — small inputs push further up (3× toward 3600),
+ * native-size photos resample down toward 2400 — so a retry sees genuinely new
+ * pixel statistics instead of repeating the same miss.
+ *
  * Returns the prepared canvas and the `scale` applied, so word boxes read off it
  * divide cleanly back into the source image's pixel space. The original image is
  * left untouched — this output feeds OCR only, never the display or the export.
  */
-export function preprocessForOcr(src: Source, targetDim = 2400): { canvas: HTMLCanvasElement; scale: number } {
+export function preprocessForOcr(src: Source, look: OcrLook = "first"): { canvas: HTMLCanvasElement; scale: number } {
   const { w, h } = sourceSize(src);
   const longest = Math.max(w, h);
-  // Only ever upscale small inputs (callers already cap the working size), and
-  // never past 2× — beyond that there's no real detail to recover.
-  const scale = longest > 0 && longest < targetDim ? Math.min(2, targetDim / longest) : 1;
+  // First pass: only ever upscale small inputs (callers already cap the working
+  // size), and never past 2× — beyond that there's no real detail to recover.
+  let scale = 1;
+  if (longest > 0) {
+    if (look === "first") scale = longest < 2400 ? Math.min(2, 2400 / longest) : 1;
+    else scale = longest < 3600 ? Math.min(3, 3600 / longest) : 2400 / longest;
+  }
   const cw = Math.max(1, Math.round(w * scale));
   const ch = Math.max(1, Math.round(h * scale));
 
