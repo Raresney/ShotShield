@@ -1,8 +1,8 @@
 import { scan, type Detection, type Severity } from "@shotshield/core";
-import { ocr, ocrAutoOrient, type Box, type OcrWord, type ProgressFn } from "./ocr.ts";
+import { ocr, ocrAutoOrient, ocrSecondLook, type Box, type OcrWord, type ProgressFn } from "./ocr.ts";
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
-import { locate, paint, type Region } from "./redact.ts";
+import { locate, mergeRegions, needsSecondLook, paint, type Region } from "./redact.ts";
 import { downloadCanvas } from "./export.ts";
 import { loadSettings, renderSettings, scanConfig } from "./settings.ts";
 import { checkForUpdate, type PendingUpdate } from "./update.ts";
@@ -200,9 +200,10 @@ let manualBoxes: Box[] = []; // hand-drawn redaction rectangles, in image-pixel 
 // so Ctrl+Z / Ctrl+Y step through them. Both are reset when the image changes.
 let undoStack: Box[][] = [];
 let redoStack: Box[][] = [];
-// The last OCR pass, cached so a settings change can re-derive findings without
-// reading the image again. Detected faces are cached the same way.
-let lastOcr: { text: string; words: OcrWord[] } | null = null;
+// The OCR passes for the current image (one, or two when the second look ran),
+// cached so a settings change can re-derive findings without reading the image
+// again. Detected faces are cached the same way.
+let lastOcr: { text: string; words: OcrWord[] }[] = [];
 let lastFaces: Region[] = [];
 
 function displayImage(img: HTMLImageElement): void {
@@ -264,7 +265,24 @@ async function scanImage(
   }
 
   currentImg = working;
-  lastOcr = { text, words };
+  lastOcr = [{ text, words }];
+
+  // Second look: when the image clearly reads as a Romanian ID but the CNP —
+  // the field a marginal, scale-dependent read loses most often — came back
+  // empty, retry once at a deliberately different render scale and keep both
+  // passes. Best-effort: a retry failure must not drop the first pass.
+  const firstDets = scan(text, scanConfig(settings));
+  if (needsSecondLook(firstDets, text, settings.enabled.national_id ?? true)) {
+    summary.textContent = "Taking a closer look…";
+    try {
+      const second = await ocrSecondLook(working, onProgress);
+      if (token !== gen) return;
+      if (second.text.trim()) lastOcr.push(second);
+    } catch (err) {
+      console.error("Second OCR pass failed", err);
+    }
+    if (token !== gen) return;
+  }
 
   // Faces are best-effort and detected once per image, then cached: a model-load
   // failure must not drop the text findings, and toggling the Faces setting later
@@ -289,10 +307,15 @@ async function scanImage(
 // settings, then paint and render. Runs after a scan finishes and whenever a
 // setting changes, so toggling a category never triggers a fresh OCR pass.
 function recomputeRegions(): void {
-  if (!lastOcr || !currentImg) return;
-  const textRegions = lastOcr.text.trim()
-    ? locate(scan(lastOcr.text, scanConfig(settings)), lastOcr.words)
-    : [];
+  if (lastOcr.length === 0 || !currentImg) return;
+  // Union the passes: the second look mostly re-reads what the first saw, so
+  // duplicate hits (same category, same spot) collapse and only what one pass
+  // caught alone — the missed CNP — comes through as a new region.
+  let textRegions: Region[] = [];
+  for (const pass of lastOcr) {
+    if (!pass.text.trim()) continue;
+    textRegions = mergeRegions(textRegions, locate(scan(pass.text, scanConfig(settings)), pass.words));
+  }
   const faceRegions = settings.faces ? lastFaces : [];
   regions = [...textRegions, ...faceRegions];
   paint(canvas, currentImg, regions, manualBoxes);
@@ -613,7 +636,7 @@ function clearImage(): void {
   manualBoxes = [];
   undoStack = [];
   redoStack = [];
-  lastOcr = null;
+  lastOcr = [];
   lastFaces = [];
   canvas.hidden = true;
   drawbox.hidden = true;
