@@ -33,8 +33,12 @@ const adversarial: Record<string, string> = {
   "mrz uppercase": "A".repeat(N) + "<<" + "B".repeat(N),
   // Long digit runs feed the card / CNP / phone passes at once.
   "digit run": "1".repeat(N),
-  // Space-separated short tokens hammer the split-CNP two-group pass.
+  // Separator-joined short tokens hammer the split-CNP multi-run pass — one
+  // case per separator class member it stitches across.
   "split tokens": "12 ".repeat(N),
+  "dotted tokens": "12.".repeat(N),
+  "dashed tokens": "12-".repeat(N),
+  "newline tokens": "12\n".repeat(N),
   // Mixed look-alike letters the CNP unconfuse passes walk over.
   "cnp lookalikes": "OISBZ ".repeat(N),
 };

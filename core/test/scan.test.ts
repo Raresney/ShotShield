@@ -231,6 +231,74 @@ test("ignores two adjacent numbers that don't join into a valid CNP", () => {
   assert.deepEqual(scan("comanda 12345 67890123 livrata"), []);
 });
 
+test("redacts a CNP that OCR split into three word boxes", () => {
+  // The lead digit often sits apart from the rest (a hologram crosses it), so
+  // the rebuilt text reads "1 960209 025813" — three boxes, no label in reach.
+  const dets = scan("identitate 1 960209 025813 valabil");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+  assert.equal(dets[0]!.text, "1 960209 025813");
+});
+
+test("redacts a CNP whose kerning gap OCR read as a dash or a dot", () => {
+  // A guilloche line crossing the digits comes back as "-" or "." instead of a
+  // space; the stitch must cross those the same way it crosses a gap.
+  for (const sep of ["-", "."]) {
+    const dets = scan(`buletin 1960209${sep}025813 emis`);
+    assert.equal(dets.length, 1, `separator "${sep}"`);
+    assert.equal(dets[0]!.category, "national_id");
+  }
+});
+
+test("redacts a CNP whose halves landed on different OCR lines", () => {
+  // Word boxes on slightly different baselines get rebuilt as separate lines,
+  // so the gap is a newline no single-line pass can cross — labelled or not.
+  for (const text of ["CNP 1960209\n025813", "act 1960209\n025813 emis"]) {
+    const dets = scan(text);
+    assert.equal(dets.length, 1, JSON.stringify(text));
+    assert.equal(dets[0]!.category, "national_id");
+  }
+});
+
+test("redacts a CNP whose lead digit split off on its own", () => {
+  // "1 960209025813": a single stray character is a valid OCR word, so the
+  // stitch accepts a one-digit run — the old two-digit floor left this bare.
+  const dets = scan("identitate 1 960209025813 valabil");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+});
+
+test("redacts a foreign-national CNP (lead digit 9) on structure alone", () => {
+  // Pre-2022 foreign nationals carry a 9-led CNP. With the checksum broken by
+  // a misread, only the structural pass is left — it must not stop at 8.
+  const dets = scan("cnp strain 9960209025813 inregistrat");
+  assert.equal(dets.length, 1);
+  assert.equal(dets[0]!.category, "national_id");
+});
+
+test("a labelled CNP never swallows the digits on the next line", () => {
+  // Two CNP renders on adjacent lines, label on the first. If the label pass
+  // could cross the newline its greedy span would eat the second line's lead
+  // digits, and that over-long hit would shadow the second line's own
+  // detection in overlap resolution — leaving its tail exposed on the export.
+  const dets = scan("CNP 1960209-025813\n1 960209 025813");
+  assert.equal(dets.length, 2);
+  for (const d of dets) {
+    assert.equal(d.category, "national_id");
+    assert.ok(!d.text.includes("\n"), `span must stay on its line: ${JSON.stringify(d.text)}`);
+  }
+});
+
+test("ignores dates, times and grouped amounts near the split-CNP pass", () => {
+  // Dotted dates and thousands-grouped sums are the separator shapes the
+  // widened stitch walks over — digit count or the embedded date rejects them.
+  assert.deepEqual(scan("plata din 14.07.2026 la 15:30"), []);
+  assert.deepEqual(scan("total 1.234.567 lei"), []);
+  // A column of order numbers joins to 13 digits across the newline, but the
+  // embedded month (45) is out of range — vertical neighbours don't glue.
+  assert.deepEqual(scan("comenzi:\n12345\n67890123\ngata"), []);
+});
+
 test("detects the name line of an ID machine-readable zone", () => {
   // surname<<given-names, padded with `<` — a TD1/TD3 MRZ name line.
   const dets = scan("POPESCU<<ION<<<<<<<<<<<<<<<<<<");
