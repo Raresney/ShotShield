@@ -80,7 +80,15 @@ export function scan(text: string, config?: ScanConfig): Detection[] {
       let confidence = rule.baseConfidence;
       if (rule.refine) {
         const res = rule.refine(raw);
-        if (res === false) continue;
+        if (res === false) {
+          // A rejected candidate must not swallow text: the same rule may have
+          // a real hit starting inside the rejected span — e.g. the split-CNP
+          // stitch greedily gluing a neighbour onto a real CNP and failing the
+          // digit count, with the true match starting one token in. Resume
+          // just past the match start, not past its end.
+          rule.regex.lastIndex = m.index + 1;
+          continue;
+        }
         if (res.label !== undefined) label = res.label;
         if (res.confidence !== undefined) confidence = res.confidence;
       }

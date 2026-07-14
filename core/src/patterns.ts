@@ -34,9 +34,10 @@ const unconfuseDigits = (s: string): string =>
 // is far more robust on a photo than the control digit — a single misread digit
 // breaks the checksum, but the month, day and county still read true — while
 // staying precise: a random 13-digit run (a timestamp, an order id) almost
-// always lands an out-of-range month or day. County codes run 01-52.
+// always lands an out-of-range month or day. County codes run 01-52; the lead
+// digit runs 1-9 (7/8 are resident foreigners, 9 pre-2022 foreign nationals).
 function cnpStructValid(d: string): boolean {
-  if (!/^[1-8]\d{12}$/.test(d)) return false;
+  if (!/^[1-9]\d{12}$/.test(d)) return false;
   const month = +d.slice(3, 5);
   const day = +d.slice(5, 7);
   const county = +d.slice(7, 9);
@@ -127,15 +128,21 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     refine: (raw) => (cnpValid(raw) ? { confidence: 0.95 } : false) },
 
   // Then the buletin pass: the CNP printed behind a "CNP" label. A phone photo
-  // defeats the strict rule — OCR splits the run with stray spaces, glues the
-  // label onto the number ("CNP5050…"), and flips digits to look-alike letters
-  // (O→0, S→5, B→8, but also 2→Z, 4→A, 6→G, 7→T, 9→g…), breaking the control
-  // digit. Anchored loosely on the label — leading boundary only, so a glued
-  // number still matches — we undo those confusables, allow the spaces, and
-  // redact a ~13-digit run whether or not the checksum survives: the label carries
-  // the precision, and one misread digit shouldn't leave an ID number in the clear.
+  // defeats the strict rule — OCR splits the run with stray spaces (or a dot,
+  // a dash where a hologram line crosses the digits), glues the label onto the
+  // number ("CNP5050…"), and flips digits to look-alike letters (O→0, S→5,
+  // B→8, but also 2→Z, 4→A, 6→G, 7→T, 9→g…), breaking the control digit.
+  // Anchored loosely on the label — leading boundary only, so a glued number
+  // still matches — we undo those confusables, allow the separators, and
+  // redact a ~13-digit run whether or not the checksum survives: the label
+  // carries the precision, and one misread digit shouldn't leave an ID number
+  // in the clear. Newlines are deliberately NOT separators here: this greedy,
+  // label-anchored span would swallow the next line's digits, and the winning
+  // over-long detection then shadows that line's own hit in overlap resolution,
+  // leaving its tail exposed. A CNP broken across lines is the split pass's
+  // job — its runs are digit-class only, so its span is exact.
   { category: "national_id", label: "CNP (RO)", severity: "high",
-    source: "(?<=\\bCNP[\\s.:|/-]{0,4})[\\dOoQDIlSBbZzAGTgq][\\dOoQDIlSBbZzAGTgq ]{11,15}",
+    source: "(?<=\\bCNP[\\s.:|/-]{0,4})[\\dOoQDIlSBbZzAGTgq][\\dOoQDIlSBbZzAGTgq .\\-–—]{11,17}",
     baseConfidence: 0.85,
     refine: (raw) => {
       const d = unconfuseDigits(raw);
@@ -161,16 +168,20 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     } },
 
   // The split pass: a buletin prints the CNP as one solid 13-digit block, but a
-  // photo's kerning gap or a hologram crossing the digits makes OCR read it as
-  // two word-boxes — so the rebuilt text carries a space the contiguous passes
-  // above can't cross ("5050218 226798"), and the label pass misses it when the
-  // "CNP" caption wasn't read right next to the number. Stitch two adjacent runs
-  // back together and accept them only if they join into exactly 13 digits with a
-  // valid CNP date and county. The "at least 7 real digits" floor keeps two
-  // ordinary words made of look-alike letters from gluing into a false hit; the
-  // span covers the gap, so both word boxes get painted.
+  // photo's kerning gaps or a hologram crossing the digits make OCR read it as
+  // several word-boxes — so the rebuilt text carries separators the contiguous
+  // passes above can't cross ("5 050218 226798"), and the label pass misses it
+  // when the "CNP" caption wasn't read right next to the number. Besides spaces
+  // OCR drops a dot or dash where a guilloche line cuts the run, and a line
+  // break when the boxes land on different baselines. Stitch up to five
+  // adjacent runs back together and accept them only if they join into exactly
+  // 13 digits with a valid CNP date and county. The "at least 7 real digits"
+  // floor keeps ordinary words made of look-alike letters from gluing into a
+  // false hit; the run and separator classes are disjoint and every quantifier
+  // bounded, so the scan stays linear. The span covers the gaps, so every word
+  // box gets painted.
   { category: "national_id", label: "CNP (RO)", severity: "high",
-    source: "(?<![0-9A-Za-z<])[\\dOoQDIlSBbZzAGTgq]{2,12} [\\dOoQDIlSBbZzAGTgq]{2,12}(?![0-9A-Za-z<])",
+    source: "(?<![0-9A-Za-z<])[\\dOoQDIlSBbZzAGTgq]{1,12}(?:[ \\n.\\-–—]{1,2}[\\dOoQDIlSBbZzAGTgq]{1,12}){1,4}(?![0-9A-Za-z<])",
     baseConfidence: 0.5,
     refine: (raw) => {
       if ((raw.match(/\d/g) ?? []).length < 7) return false;
