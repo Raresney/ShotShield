@@ -2,7 +2,7 @@ import { scan, type Detection, type Severity } from "@shotshield/core";
 import { ocr, ocrAutoOrient, ocrSecondLook, type Box, type OcrWord, type ProgressFn } from "./ocr.ts";
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
-import { locate, mergeRegions, needsSecondLook, paint, type Region } from "./redact.ts";
+import { locate, mergeRegions, needsSecondLook, paint, SEVERITY_RANK, type Region } from "./redact.ts";
 import { downloadCanvas } from "./export.ts";
 import { loadSettings, renderSettings, scanConfig } from "./settings.ts";
 import { checkForUpdate, type PendingUpdate } from "./update.ts";
@@ -25,6 +25,10 @@ const progressBar = document.querySelector<HTMLDivElement>("#progressBar")!;
 const settingsBody = document.querySelector<HTMLDivElement>("#settingsBody")!;
 const updateBanner = document.querySelector<HTMLDivElement>("#updateBanner")!;
 const copyBtn = document.querySelector<HTMLButtonElement>("#copyClipboard")!;
+const stageActions = document.querySelector<HTMLDivElement>("#stageActions")!;
+const pickBtn = document.querySelector<HTMLButtonElement>("#pickBtn")!;
+const pasteBtn = document.querySelector<HTMLButtonElement>("#pasteBtn")!;
+const statusEngine = document.querySelector<HTMLElement>("#statusEngine")!;
 
 // Dashboard read-outs from the redesigned shell (header pill, findings counts,
 // status bar). These were rendered but never populated — wired up below.
@@ -106,6 +110,11 @@ function showDashboard(
   // Tint the header pill red while something sensitive is still uncovered.
   headerRiskPill.classList.toggle("status-pill-critical", exposedCount > 0);
   headerRiskPill.classList.toggle("status-pill-teal", exposedCount === 0);
+  // Dim the chips that count nothing, so the strip reads at a glance instead
+  // of showing three equal zeros.
+  criticalCount.parentElement?.classList.toggle("severity-chip-zero", critical === 0);
+  highCount.parentElement?.classList.toggle("severity-chip-zero", high === 0);
+  lowCount.parentElement?.classList.toggle("severity-chip-zero", low === 0);
   workspaceMeta.textContent = meta;
   workspaceRegions.textContent =
     totalRegions > 0 ? `${totalRegions} ${totalRegions === 1 ? "region" : "regions"}` : "";
@@ -113,14 +122,26 @@ function showDashboard(
 function resetDashboard(): void {
   showDashboard([], 0, 0, 0, "");
 }
+// Run once at startup so the zero-count chips start dimmed instead of waking
+// up only after the first scan.
+resetDashboard();
 
-function showProgress(fraction: number): void {
+// The strip names the stage it's in (Reading / Orientation / Second look /
+// Faces) so a scan feels like a pipeline, not a single opaque wait. A stage
+// with no measurable fraction runs the bar in indeterminate mode instead of
+// freezing it. The status bar's engine read-out follows along.
+function showProgress(fraction: number | null, stage = "Scanning"): void {
   progress.hidden = false;
-  progressBar.style.width = `${Math.round(fraction * 100)}%`;
+  progress.dataset.stage = stage;
+  progressBar.classList.toggle("indeterminate", fraction === null);
+  progressBar.style.width = fraction === null ? "" : `${Math.round(fraction * 100)}%`;
+  statusEngine.textContent = "Engine — scanning";
 }
 function hideProgress(): void {
   progress.hidden = true;
+  progressBar.classList.remove("indeterminate");
   progressBar.style.width = "0%";
+  statusEngine.textContent = "Engine — idle";
 }
 
 // Accent used to outline a finding's region when its row is hovered. Read live
@@ -166,6 +187,9 @@ function scanText(): void {
     return;
   }
   const dets = scan(input.value, scanConfig(settings));
+  // Text results re-render on every keystroke — no entrance animation, or the
+  // list would flicker while typing.
+  results.classList.add("settled");
   results.replaceChildren(...dets.map(row));
   summary.textContent = dets.length === 0 ? "Nothing sensitive found." : `${dets.length} found`;
   // Pasted text is only flagged, never covered — count every hit as exposed.
@@ -213,6 +237,7 @@ function displayImage(img: HTMLImageElement): void {
   canvas.getContext("2d")!.drawImage(img, 0, 0);
   canvas.hidden = false;
   stagePrompt.hidden = true;
+  stageActions.hidden = false;
   clearBtn.hidden = false;
   rotateBtn.hidden = false;
   drawHint.hidden = false;
@@ -226,13 +251,22 @@ async function scanImage(
 ): Promise<void> {
   summary.textContent = "Reading image…";
   results.replaceChildren();
-  showProgress(0);
+  showProgress(0, "Reading");
 
+  // Both OCR passes report the same "reading" phase; this flag relabels the
+  // second one so the progress strip tells them apart.
+  let secondPass = false;
   const onProgress: ProgressFn = (phase, fraction) => {
     if (token !== gen) return;
-    summary.textContent =
-      phase === "orienting" ? "Checking orientation…" : `Reading image… ${Math.round(fraction * 100)}%`;
-    showProgress(fraction);
+    if (phase === "orienting") {
+      summary.textContent = "Checking orientation…";
+      showProgress(fraction, "Orientation");
+    } else {
+      summary.textContent = secondPass
+        ? "Taking a closer look…"
+        : `Reading image… ${Math.round(fraction * 100)}%`;
+      showProgress(fraction, secondPass ? "Second look" : "Reading");
+    }
   };
 
   let text = "";
@@ -274,6 +308,8 @@ async function scanImage(
   const firstDets = scan(text, scanConfig(settings));
   if (needsSecondLook(firstDets, text, settings.enabled.national_id ?? true)) {
     summary.textContent = "Taking a closer look…";
+    secondPass = true;
+    showProgress(0, "Second look");
     try {
       const second = await ocrSecondLook(working, onProgress);
       if (token !== gen) return;
@@ -288,6 +324,7 @@ async function scanImage(
   // failure must not drop the text findings, and toggling the Faces setting later
   // shouldn't re-run the detector.
   summary.textContent = "Looking for faces…";
+  showProgress(null, "Faces"); // no per-face progress — run the bar indeterminate
   lastFaces = [];
   try {
     const { detectFaces } = await import("./faces.ts");
@@ -300,13 +337,13 @@ async function scanImage(
   if (token !== gen) return;
 
   hideProgress();
-  recomputeRegions();
+  recomputeRegions(true);
 }
 
 // Build the redaction list from the cached OCR and faces under the current
 // settings, then paint and render. Runs after a scan finishes and whenever a
 // setting changes, so toggling a category never triggers a fresh OCR pass.
-function recomputeRegions(): void {
+function recomputeRegions(fresh = false): void {
   if (lastOcr.length === 0 || !currentImg) return;
   // Union the passes: the second look mostly re-reads what the first saw, so
   // duplicate hits (same category, same spot) collapse and only what one pass
@@ -319,7 +356,7 @@ function recomputeRegions(): void {
   const faceRegions = settings.faces ? lastFaces : [];
   regions = [...textRegions, ...faceRegions];
   paint(canvas, currentImg, regions, manualBoxes);
-  renderRegions();
+  renderRegions(fresh);
   exportBtn.hidden = false;
   copyBtn.hidden = false;
 }
@@ -344,8 +381,22 @@ function faceRegion(hit: FaceHit): Region {
   };
 }
 
-function renderRegions(): void {
-  results.replaceChildren(...regions.map(regionRow), ...manualBoxes.map(manualRow));
+// `fresh` marks a brand-new scan: only then do rows play their stagger-in
+// animation. Re-renders (toggling a region, changing a setting, undo) keep the
+// list still — replaying the entrance on every click reads as flicker.
+function renderRegions(fresh = false): void {
+  results.classList.toggle("settled", !fresh);
+  // Scariest first: a critical hit should never hide below the fold.
+  const ordered = regions
+    .map((region, index) => ({ region, index }))
+    .sort(
+      (a, b) =>
+        SEVERITY_RANK[a.region.detection.severity] - SEVERITY_RANK[b.region.detection.severity],
+    );
+  results.replaceChildren(
+    ...ordered.map(({ region, index }) => regionRow(region, index)),
+    ...manualBoxes.map(manualRow),
+  );
 
   const parts: string[] = [];
   if (regions.length > 0) {
@@ -641,6 +692,7 @@ function clearImage(): void {
   canvas.hidden = true;
   drawbox.hidden = true;
   stagePrompt.hidden = false;
+  stageActions.hidden = true;
   clearBtn.hidden = true;
   rotateBtn.hidden = true;
   compareBtn.hidden = true;
@@ -657,11 +709,31 @@ function clearImage(): void {
 
 const canPick = () => !stage.classList.contains("has-image");
 
+// The whole empty stage stays clickable; the prompt buttons are the real,
+// keyboard-focusable controls and stop the click from double-opening the picker.
 stage.addEventListener("click", () => canPick() && fileInput.click());
-stage.addEventListener("keydown", (e) => {
-  if ((e.key === "Enter" || e.key === " ") && canPick()) {
-    e.preventDefault();
-    fileInput.click();
+pickBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (canPick()) fileInput.click();
+});
+// Read an image straight from the clipboard — the button must do what it says,
+// not fall through to the file picker.
+pasteBtn.addEventListener("click", async (e) => {
+  e.stopPropagation();
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const type = item.types.find((t) => t.startsWith("image/"));
+      if (type) {
+        const blob = await item.getType(type);
+        handleFile(new File([blob], "clipboard", { type }));
+        return;
+      }
+    }
+    flash(pasteBtn, "No image in clipboard");
+  } catch (err) {
+    console.error("Clipboard read failed", err);
+    flash(pasteBtn, "Clipboard blocked");
   }
 });
 fileInput.addEventListener("change", () => {
@@ -671,7 +743,10 @@ fileInput.addEventListener("change", () => {
   fileInput.value = "";
 });
 clearBtn.addEventListener("click", clearImage);
-exportBtn.addEventListener("click", () => downloadCanvas(canvas, "shotshield-redacted.png"));
+exportBtn.addEventListener("click", () => {
+  downloadCanvas(canvas, "shotshield-redacted.png");
+  flash(exportBtn, "Exported ✓");
+});
 
 // Briefly swap a button's label to confirm an action, then restore it.
 function flash(btn: HTMLButtonElement, msg: string): void {
@@ -766,12 +841,12 @@ function showUpdateBanner(update: PendingUpdate): void {
 
   const action = document.createElement("button");
   action.type = "button";
-  action.className = "btn btn-primary update-action";
+  action.className = "tool-btn tool-btn-primary update-action";
   action.textContent = "Update & restart";
 
   const later = document.createElement("button");
   later.type = "button";
-  later.className = "btn update-later";
+  later.className = "tool-btn update-later";
   later.textContent = "Later";
   later.addEventListener("click", () => (updateBanner.hidden = true));
 
