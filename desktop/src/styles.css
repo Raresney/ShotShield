@@ -157,6 +157,29 @@ body {
 
 button, input, textarea { font: inherit; }
 
+/* ── SCROLLBARS ──────────────────────────────── */
+/* The OS default scrollbar is an opaque grey gutter that cuts straight through
+   the glass panels. Thin, rounded, translucent thumbs keep the depth intact. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.13);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.24); }
+
+:root[data-theme="light"] * { scrollbar-color: rgba(19, 32, 42, 0.30) transparent; }
+:root[data-theme="light"] *::-webkit-scrollbar-thumb { background-color: rgba(19, 32, 42, 0.26); }
+:root[data-theme="light"] *::-webkit-scrollbar-thumb:hover { background-color: rgba(19, 32, 42, 0.42); }
+
 /* ── NOISE TEXTURE ───────────────────────────── */
 .noise-overlay {
   position: fixed;
@@ -227,15 +250,17 @@ button, input, textarea { font: inherit; }
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 108px;
-  height: 108px;
+  /* Must stay under the topbar's 58px min-height — a larger mark inflates the
+     whole bar and steals vertical space from the workspace. */
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
 }
 
 .brand-logo {
   display: block;
-  width: 108px;
-  height: 108px;
+  width: 44px;
+  height: 44px;
   object-fit: contain;
   image-rendering: -webkit-optimize-contrast;
   filter: brightness(1.15) contrast(1.12) drop-shadow(0 2px 8px rgba(0,0,0,0.40));
@@ -320,10 +345,10 @@ button, input, textarea { font: inherit; }
   color: var(--fg);
   cursor: pointer;
   transition:
-    transform 600ms var(--spring),
-    background-color 600ms var(--spring),
-    border-color 600ms var(--spring),
-    box-shadow 600ms var(--spring);
+    transform 200ms var(--spring),
+    background-color 200ms var(--spring),
+    border-color 200ms var(--spring),
+    box-shadow 200ms var(--spring);
 }
 
 .theme-toggle:hover {
@@ -363,7 +388,7 @@ button, input, textarea { font: inherit; }
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.22),
     0 4px 10px rgba(0, 0, 0, 0.30);
-  transition: transform 600ms var(--spring), background 600ms var(--spring);
+  transition: transform 200ms var(--spring), background 200ms var(--spring);
 }
 
 .theme-toggle-label {
@@ -451,6 +476,10 @@ button, input, textarea { font: inherit; }
   font-weight: 600;
 }
 
+/* A chip counting nothing recedes; the ones that matter read at a glance. */
+.severity-chip { transition: opacity 200ms var(--snappy); }
+.severity-chip-zero { opacity: 0.45; }
+
 :root[data-theme="light"] .status-pill,
 :root[data-theme="light"] .severity-chip {
   box-shadow: var(--shadow-card);
@@ -482,9 +511,14 @@ button, input, textarea { font: inherit; }
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 18px;
-  border-bottom: 1px solid rgba(242, 191, 88, 0.16);
-  background: rgba(242, 191, 88, 0.07);
+  margin: 0 0 12px;
+  padding: 8px 10px 8px 18px;
+  border: 1px solid rgba(242, 191, 88, 0.22);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(242,191,88,0.09) 0%, rgba(242,191,88,0.03) 100%),
+    rgba(10, 14, 24, 0.88);
+  box-shadow: var(--shadow-card);
   color: var(--fg);
   font-size: 12px;
 }
@@ -492,15 +526,17 @@ button, input, textarea { font: inherit; }
 .update-text { flex: 1; }
 
 .update-banner .tool-btn {
-  min-height: 28px;
-  padding-inline: 12px;
+  min-height: 30px;
+  padding-inline: 14px;
 }
 
 .update-banner[hidden] { display: none; }
 
 :root[data-theme="light"] .update-banner {
-  border-bottom-color: rgba(123,94,38,0.24);
-  background: rgba(123,94,38,0.10);
+  border-color: rgba(123,94,38,0.28);
+  background:
+    linear-gradient(180deg, rgba(123,94,38,0.12) 0%, rgba(123,94,38,0.04) 100%),
+    rgba(200, 211, 222, 0.92);
 }
 
 /* ── WORKSPACE GRID ──────────────────────────── */
@@ -542,16 +578,10 @@ button, input, textarea { font: inherit; }
   background:
     linear-gradient(180deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0.006) 100%),
     var(--inner-bg);
-  border-bottom: 1px solid var(--hairline);
-}
-
-.findings-panel .findings-footer {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.032) 0%, rgba(255,255,255,0.008) 100%),
-    var(--inner-bg);
   box-shadow: var(--inner-highlight);
   border-top-left-radius: 26px;
   border-top-right-radius: 26px;
+  border-bottom: 1px solid var(--hairline);
 }
 
 .settings-scroll {
@@ -670,8 +700,8 @@ button, input, textarea { font: inherit; }
   color: var(--fg);
   cursor: pointer;
   transition:
-    transform 600ms var(--spring),
-    background-color 600ms var(--spring);
+    transform 200ms var(--spring),
+    background-color 200ms var(--spring);
 }
 
 .settings-item:hover {
@@ -858,9 +888,9 @@ button, input, textarea { font: inherit; }
   box-shadow: var(--shadow-elevated);
   cursor: pointer;
   transition:
-    transform 900ms var(--spring),
-    border-color 900ms var(--spring),
-    box-shadow 900ms var(--spring);
+    transform 240ms var(--spring),
+    border-color 240ms var(--spring),
+    box-shadow 240ms var(--spring);
 }
 
 .stage:hover,
@@ -889,7 +919,7 @@ button, input, textarea { font: inherit; }
     var(--stage-bg);
   background-size: auto, 22px 22px, auto;
   pointer-events: none;
-  transition: background-color 700ms var(--spring);
+  transition: background-color 220ms var(--spring);
 }
 
 :root[data-theme="light"] .stage {
@@ -906,6 +936,31 @@ button, input, textarea { font: inherit; }
 :root[data-theme="light"] .stage.dragover {
   border-color: rgba(28, 106, 116, 0.64);
   box-shadow: var(--shadow-elevated), 0 0 0 4px rgba(28, 106, 116, 0.10);
+}
+
+/* Soft inner glow that fades in while a file hovers over the stage — the
+   border alone is easy to miss mid-drag. Sits above the backdrop (z1) and
+   below the prompt/canvas (z2). */
+.stage::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  z-index: 1;
+  border-radius: 26px;
+  background: radial-gradient(ellipse 62% 48% at 50% 52%, rgba(93, 232, 231, 0.13), transparent 72%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms var(--out);
+}
+
+.stage.dragover::after { opacity: 1; }
+
+.stage.dragover .stage-prompt-art {
+  transform: translateY(-3px) scale(1.02);
+}
+
+:root[data-theme="light"] .stage::after {
+  background: radial-gradient(ellipse 62% 48% at 50% 52%, rgba(28, 106, 116, 0.12), transparent 72%);
 }
 
 /* ── STAGE CHROME BAR ────────────────────────── */
@@ -994,7 +1049,11 @@ button, input, textarea { font: inherit; }
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 52px 48px 36px;
+  /* Modest padding + the clamped art below keep the whole prompt inside the
+     stage on a 720p window — the stage clips overflow, so a too-tall prompt
+     loses its heading and buttons. */
+  padding: 46px 44px 28px;
+  max-height: 100%;
   text-align: left;
 }
 
@@ -1012,16 +1071,17 @@ button, input, textarea { font: inherit; }
   align-items: flex-start;
   margin-bottom: 18px;
   pointer-events: none;
+  transition: transform 240ms var(--spring);
 }
 
 .stage-prompt-image {
   display: block;
-  height: 160px;
+  height: clamp(96px, 24vh, 160px);
   width: auto;
   border-radius: 12px;
   margin: -18px -14px -10px -14px;
   filter: drop-shadow(0 8px 24px rgba(0,0,0,0.32));
-  transition: transform 800ms var(--spring), filter 800ms var(--spring);
+  transition: transform 240ms var(--spring), filter 240ms var(--spring);
 }
 
 .stage-prompt-image:hover {
@@ -1127,9 +1187,9 @@ button, input, textarea { font: inherit; }
   font-weight: 600;
   cursor: pointer;
   transition:
-    transform 700ms var(--spring),
-    background-color 700ms var(--spring),
-    border-color 700ms var(--spring);
+    transform 220ms var(--spring),
+    background-color 220ms var(--spring),
+    border-color 220ms var(--spring);
 }
 
 .prompt-button:hover {
@@ -1243,6 +1303,23 @@ button, input, textarea { font: inherit; }
   font-size: 11.5px;
 }
 
+.draw-hint kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--hairline);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--fg-dim);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+}
+
+:root[data-theme="light"] .draw-hint kbd {
+  background: rgba(19, 32, 42, 0.07);
+  color: var(--muted);
+  border-color: var(--border);
+}
+
 /* ── PROGRESS BAR ────────────────────────────── */
 .progress {
   position: absolute;
@@ -1264,8 +1341,10 @@ button, input, textarea { font: inherit; }
 
 .progress[hidden] { display: none; }
 
+/* The label names the pipeline stage (Reading / Orientation / Second look /
+   Faces) — set from JS via data-stage, so a scan reads as steps, not one wait. */
 .progress::before {
-  content: "Scanning";
+  content: attr(data-stage);
   color: var(--teal);
   font-family: 'JetBrains Mono', monospace;
   font-size: 9.5px;
@@ -1282,6 +1361,19 @@ button, input, textarea { font: inherit; }
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(93,232,231,0.22), var(--teal));
   transition: width 0.2s ease-out;
+}
+
+/* Stages with no measurable fraction (face detection) sweep instead of freezing. */
+.progress-bar.indeterminate {
+  background:
+    linear-gradient(90deg, transparent, var(--teal), transparent)
+    no-repeat 0 0 / 40% 100%;
+  animation: bar-sweep 1.2s ease-in-out infinite;
+}
+
+@keyframes bar-sweep {
+  0%   { background-position: -40% 0; }
+  100% { background-position: 140% 0; }
 }
 
 :root[data-theme="light"] .progress {
@@ -1335,9 +1427,9 @@ button, input, textarea { font: inherit; }
   font-weight: 500;
   cursor: pointer;
   transition:
-    transform 600ms var(--spring),
-    background-color 600ms var(--spring),
-    border-color 600ms var(--spring),
+    transform 200ms var(--spring),
+    background-color 200ms var(--spring),
+    border-color 200ms var(--spring),
     opacity 200ms ease;
 }
 
@@ -1356,6 +1448,35 @@ button, input, textarea { font: inherit; }
 }
 
 .tool-btn[hidden] { display: none; }
+
+/* Keyboard focus must be visible on every interactive control — the dark
+   theme previously only ringed the theme toggle and finding rows. */
+.tool-btn:focus-visible,
+.prompt-button:focus-visible {
+  outline: none;
+  border-color: rgba(93, 232, 231, 0.40);
+  box-shadow: 0 0 0 3px rgba(93, 232, 231, 0.12);
+}
+
+.settings-item:has(input:focus-visible) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.settings-item input:focus-visible + .settings-switch {
+  border-color: rgba(93, 232, 231, 0.50);
+  box-shadow: 0 0 0 3px rgba(93, 232, 231, 0.16);
+}
+
+:root[data-theme="light"] .settings-item:has(input:focus-visible) {
+  background: rgba(19, 32, 42, 0.07);
+}
+
+:root[data-theme="light"] .settings-item input:focus-visible + .settings-switch,
+:root[data-theme="light"] .prompt-button:focus-visible {
+  outline: none;
+  border-color: rgba(28, 106, 116, 0.46);
+  box-shadow: 0 0 0 3px rgba(28, 106, 116, 0.16);
+}
 
 :root[data-theme="light"] .tool-btn {
   border-color: var(--border);
@@ -1545,12 +1666,41 @@ textarea:focus {
   border-bottom-right-radius: 0;
 }
 
+/* Empty state: the list is blank most of the time, so say what belongs here
+   instead of showing a void. Pure CSS — vanishes the moment a row lands. */
+.results:empty {
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.results:empty::before {
+  content: "No findings yet";
+  color: var(--fg-dim);
+  font-family: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.results:empty::after {
+  content: "Scan a screenshot — every detection lands here.";
+  max-width: 200px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+/* An empty summary row is just a 48px blank strip — drop it until it has text. */
+.findings-toolbar:has(.summary:empty) { display: none; }
+
 /* ── FINDINGS FOOTER ─────────────────────────── */
 .findings-footer {
   flex: none;
   display: block;
   padding: 10px;
-  border-bottom: 1px solid var(--hairline);
+  border-top: 1px solid var(--hairline);
 }
 
 :root[data-theme="light"] .findings-footer { border-top-color: var(--hairline); }
@@ -1590,16 +1740,16 @@ textarea:focus {
   margin: 0;
   color: var(--fg);
   font-family: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 400;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
 .how-it-works-copy {
-  margin: 7px 0 0;
+  margin: 6px 0 0;
   color: var(--muted);
-  font-size: 14.5px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -1623,10 +1773,10 @@ textarea:focus {
   box-shadow: var(--shadow-card);
   color: var(--fg);
   transition:
-    transform 600ms var(--spring),
-    border-color 600ms var(--spring),
-    background-color 600ms var(--spring),
-    box-shadow 600ms var(--spring);
+    transform 200ms var(--spring),
+    border-color 200ms var(--spring),
+    background-color 200ms var(--spring),
+    box-shadow 200ms var(--spring);
 }
 
 :root[data-theme="light"] .hit {
@@ -1843,10 +1993,17 @@ textarea:focus {
 .results .hit:nth-child(5) { animation-delay: 160ms; }
 .results .hit:nth-child(n+6) { animation-delay: 200ms; }
 
+/* Re-renders (toggling a region, tweaking a setting) keep the list still —
+   only a fresh scan plays the stagger. JS drops this class on new results. */
+.results.settled .hit { animation: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .stage.has-image .canvas,
   .results .hit,
-  .prompt-orb {
+  .prompt-orb,
+  .topbar-title,
+  :root[data-theme="light"] .topbar-title,
+  .progress-bar.indeterminate {
     animation: none;
   }
 }
