@@ -33,11 +33,13 @@ The engine reads the text in an image with OCR, then runs it through a table of 
 - Emails, and phone numbers in international or Romanian form
 - Faces, from a small detector that runs inside the app
 
-Every category has an on/off switch, and you can add your own regex rules on top.
+The OCR reads English and Romanian; both models are bundled, nothing is downloaded. Sideways photos get straightened automatically before the scan. And when an image reads like a Romanian ID but no CNP turned up, the scan takes a second look at a different scale — on a phone photo the number is usually there, just read badly the first time around.
+
+Every category has an on/off switch, a slider sets the minimum confidence a finding needs to show up, and you can add your own regex rules on top.
 
 ## Using it
 
-Drop a screenshot onto the window, paste one with Ctrl+V, or pick a file. The scan runs, the findings show up in the list, and anything sensitive is covered right away. Click a finding to uncover or re-cover it, or drag a box on the image to hide something the scan missed, like a face or a home address. Export writes the redacted copy, with the boxes baked into the pixels.
+Drop a screenshot onto the window, paste one from the clipboard, or pick a file. The scan runs — the progress bar names each stage as it goes — and anything sensitive is covered right away, with the findings listed worst first. Click a finding to uncover or re-cover it, drag a box on the image to hide something the scan missed, like a home address, and hold the Compare button whenever you want to peek at the original. Export writes the redacted copy, with the boxes baked into the pixels — or copy it straight to the clipboard and paste it into the chat you were about to send it to.
 
 A few keys speed up the loop:
 
@@ -49,6 +51,8 @@ A few keys speed up the loop:
 ## Privacy
 
 The image stays on your computer. The OCR (tesseract.js) and the face model (face-api) are bundled into the app and run offline, so there's no account to create and nowhere for the picture to be sent. The build also ships a Content Security Policy that blocks outbound requests, which stops a stray dependency from phoning home.
+
+The export helps too, in a quieter way: the file you save is redrawn from the canvas, pixel by pixel, so camera metadata — EXIF tags, GPS coordinates, device model — never makes it into the copy you share. And because the redaction is painted into those pixels rather than layered on top, there's nothing underneath to recover.
 
 ## What's in the repo
 
