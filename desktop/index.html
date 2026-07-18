@@ -60,13 +60,7 @@
 
         <main class="main-column">
           <section class="stage-section">
-            <div
-              id="stage"
-              class="stage"
-              tabindex="0"
-              role="button"
-              aria-label="Drop, paste, or choose an image to scan"
-            >
+            <div id="stage" class="stage">
               <div class="stage-chrome">
                 <div class="stage-meta">
                   <span class="stage-dot"></span>
@@ -85,21 +79,21 @@
                   <p class="stage-hint">Drop a screenshot to scan</p>
                   <p class="stage-sub">ID cards, bank cards, API keys, faces, addresses — all scanned on-device.</p>
                   <div class="prompt-actions">
-                    <span class="prompt-button prompt-button-primary">
+                    <button id="pickBtn" type="button" class="prompt-button prompt-button-primary">
                       <svg class="prompt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <rect x="3" y="3" width="18" height="18" rx="2" />
                         <circle cx="8.5" cy="8.5" r="1.5" />
                         <path d="M21 15l-5-5L5 21" />
                       </svg>
                       Choose an image
-                    </span>
-                    <span class="prompt-button">
+                    </button>
+                    <button id="pasteBtn" type="button" class="prompt-button">
                       <svg class="prompt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <rect x="8" y="2" width="8" height="4" rx="1" />
                         <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
                       </svg>
                       Paste from clipboard
-                    </span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -114,19 +108,19 @@
             </div>
 
             <p id="drawHint" class="draw-hint" hidden>
-              Drag on the image to manually redact a region.
+              Drag on the image to redact a region &nbsp;·&nbsp; <kbd>Space</kbd> hide/show all &nbsp;·&nbsp; <kbd>Ctrl+Z</kbd> undo &nbsp;·&nbsp; <kbd>Ctrl+S</kbd> export
             </p>
           </section>
 
-          <div class="stage-actions">
-            <button id="rotate" class="tool-btn" hidden>Rotate</button>
-            <button id="compare" class="tool-btn" hidden>Hold to compare</button>
-            <button id="clear" class="tool-btn" hidden>Clear</button>
+          <div id="stageActions" class="stage-actions" hidden>
+            <button id="rotate" class="tool-btn" title="Rotate 90° clockwise" hidden>Rotate</button>
+            <button id="compare" class="tool-btn" title="Press and hold to see the original" hidden>Hold to compare</button>
+            <button id="clear" class="tool-btn" title="Remove the image" hidden>Clear</button>
 
             <div class="stage-actions-spacer"></div>
 
-            <button id="copyClipboard" class="tool-btn secondary-export" hidden>Copy to clipboard</button>
-            <button id="export" class="tool-btn tool-btn-primary" hidden>Export redacted</button>
+            <button id="copyClipboard" class="tool-btn secondary-export" title="Copy the redacted image as PNG" hidden>Copy to clipboard</button>
+            <button id="export" class="tool-btn tool-btn-primary" title="Save the redacted image as PNG (Ctrl+S)" hidden>Export redacted</button>
           </div>
 
           <details class="fallback">
@@ -142,16 +136,6 @@
         </main>
 
         <aside class="findings-panel">
-          <div class="findings-footer">
-            <section class="how-it-works-card" aria-labelledby="howItWorksTitle">
-              <p class="how-it-works-kicker">How it works</p>
-              <h3 id="howItWorksTitle">Local scan, review, redact, export.</h3>
-              <p class="how-it-works-copy">
-                Drop a screenshot, get instant on-device OCR and face detection, review findings, redact what you need, export clean.
-              </p>
-            </section>
-          </div>
-
           <div class="panel-head">
             <span class="panel-kicker">Findings</span>
             <span id="findingsCount" class="panel-count">0</span>
@@ -164,15 +148,25 @@
           </div>
 
           <div class="findings-toolbar">
-            <p id="summary" class="summary"></p>
+            <p id="summary" class="summary" aria-live="polite"></p>
           </div>
 
           <div id="results" class="results"></div>
+
+          <div class="findings-footer">
+            <section class="how-it-works-card" aria-labelledby="howItWorksTitle">
+              <p class="how-it-works-kicker">How it works</p>
+              <h3 id="howItWorksTitle">Local scan, review, redact, export.</h3>
+              <p class="how-it-works-copy">
+                Drop a screenshot, get instant on-device OCR and face detection, review findings, redact what you need, export clean.
+              </p>
+            </section>
+          </div>
         </aside>
       </div>
 
       <footer class="statusbar">
-        <span class="statusbar-engine">Engine — idle</span>
+        <span id="statusEngine" class="statusbar-engine">Engine — idle</span>
         <span>·</span>
         <span><span id="statusTotal">0</span> regions</span>
         <span>·</span>

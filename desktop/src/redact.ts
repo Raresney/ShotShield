@@ -1,5 +1,13 @@
-import type { Detection } from "@shotshield/core";
+import type { Detection, Severity } from "@shotshield/core";
 import type { Box, OcrWord } from "./ocr.ts";
+
+/** Display order for findings: the scariest first. */
+export const SEVERITY_RANK: Record<Severity, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
 
 export interface Region {
   detection: Detection;

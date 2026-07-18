@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { locate, mergeRegions, needsSecondLook, type Region } from "../src/redact.ts";
+import { locate, mergeRegions, needsSecondLook, SEVERITY_RANK, type Region } from "../src/redact.ts";
 import type { Detection } from "@shotshield/core";
 import type { OcrWord } from "../src/ocr.ts";
 
@@ -81,6 +81,14 @@ describe("mergeRegions", () => {
     // A face box crossing a text field is two real findings, not a duplicate.
     const merged = mergeRegions([region("face", 90, 190, 200, 200)], [region("national_id", 100, 200)]);
     expect(merged).toHaveLength(2);
+  });
+});
+
+describe("SEVERITY_RANK", () => {
+  it("orders findings scariest-first", () => {
+    expect(SEVERITY_RANK.critical).toBeLessThan(SEVERITY_RANK.high);
+    expect(SEVERITY_RANK.high).toBeLessThan(SEVERITY_RANK.medium);
+    expect(SEVERITY_RANK.medium).toBeLessThan(SEVERITY_RANK.low);
   });
 });
 
