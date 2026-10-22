@@ -14,18 +14,18 @@
   },
   "dependencies": {
     "@shotshield/core": "*",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-process": "^2.3.1",
-    "@tauri-apps/plugin-updater": "^2.10.1",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.0",
     "@vladmandic/face-api": "^1.7.15",
     "tesseract.js": "^7.0.0",
     "tesseract.js-core": "^7.0.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
-    "happy-dom": "^15",
-    "typescript": "~5.6.2",
-    "vite": "^6.0.3",
-    "vitest": "^2"
+    "@tauri-apps/cli": "^2.12.4",
+    "happy-dom": "^21.0.4",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   }
 }
