@@ -73,12 +73,16 @@ function getWorker() {
   return workerPromise;
 }
 
-// A confident run of 4+ letters. Rotated or upside-down text gives Tesseract
-// only short, shaky fragments, so counting these separates an upright read from
-// a sideways one far more reliably than a raw confidence count — which Tesseract
-// happily hands to the garbage tokens it reads off sideways text.
-export function isRealWord(text: string, confidence: number): boolean {
-  return confidence >= 60 && /^\p{L}{4,}$/u.test(text);
+// How many confident runs of 4+ letters a word holds. Rotated or upside-down
+// text gives Tesseract only short, shaky fragments, so counting these separates
+// an upright read from a sideways one far more reliably than a raw confidence
+// count — which Tesseract happily hands to the garbage it reads off rotated
+// text. Runs are counted *inside* words: a config line is a single OCR word
+// ("DATABASE_URL=postgres://admin") yet holds three real runs, and scoring it
+// zero made upright code screenshots look unreadable.
+export function realWordRuns(text: string, confidence: number): number {
+  if (confidence < 60) return 0;
+  return text.match(/\p{L}{4,}/gu)?.length ?? 0;
 }
 
 interface Scored extends OcrResult {
@@ -125,7 +129,7 @@ async function recognize(
               h: (w.bbox.y1 - w.bbox.y0) / scale,
             },
           });
-          if (isRealWord(w.text, w.confidence)) score++;
+          score += realWordRuns(w.text, w.confidence);
         }
         text += "\n";
       }
@@ -171,6 +175,22 @@ export async function ocrSecondLook(
 
 // This many real words means the read is clearly upright — skip the search.
 const CLEARLY_UPRIGHT = 8;
+
+/**
+ * Pick the orientation to OCR from the search scores (index = quarter turns).
+ * The image as given wins unless a turn reads clearly better: a screenshot is
+ * almost always upright already, and a near-tie between orientations is noise,
+ * not evidence — rotating on it is what flipped upright code screenshots.
+ */
+export function pickOrientation(scores: number[]): number {
+  const asIs = scores[0] ?? 0;
+  let best = 0;
+  for (let t = 1; t < scores.length; t++) {
+    const s = scores[t] ?? 0;
+    if (s >= asIs * 1.5 + 3 && s > (scores[best] ?? 0)) best = t;
+  }
+  return best;
+}
 // Orientation only needs a relative score, so search on a downscaled copy.
 const SEARCH_MAX_DIM = 1200;
 
@@ -195,16 +215,12 @@ export async function ocrAutoOrient(
     // Not clearly upright — it may be sideways. Score all four orientations on a
     // downscaled copy (a like-for-like comparison) and keep whichever reads best.
     phase = "orienting";
-    let bestTurns = 0;
-    let bestScore = -1;
+    const scores: number[] = [];
     for (const turns of [0, 1, 2, 3]) {
       onProgress?.("orienting", turns / 4);
-      const { score } = await recognize(orientedCanvas(image, turns, SEARCH_MAX_DIM), false);
-      if (score > bestScore) {
-        bestScore = score;
-        bestTurns = turns;
-      }
+      scores.push((await recognize(orientedCanvas(image, turns, SEARCH_MAX_DIM), false)).score);
     }
+    const bestTurns = pickOrientation(scores);
 
     if (bestTurns === 0) {
       return { text: first.text, words: first.words, quarterTurns: 0 };
