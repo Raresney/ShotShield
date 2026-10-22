@@ -21,7 +21,7 @@ jobs:
           - platform: ubuntu-22.04
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Tauri's Linux build needs the WebKitGTK stack and packaging tools.
       - name: Install Linux build dependencies
@@ -37,7 +37,7 @@ jobs:
             libxdo-dev \
             libssl-dev
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
