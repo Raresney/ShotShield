@@ -3,176 +3,185 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- No remote webfonts: ShotShield is fully on-device, and the production
-         CSP (font-src/style-src 'self') blocks cross-origin font loads anyway.
-         Typography falls back to the system stack defined in styles.css. -->
-    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="color-scheme" content="dark light" />
     <title>ShotShield</title>
     <script type="module" src="/src/main.ts"></script>
   </head>
 
   <body>
-    <div class="noise-overlay" aria-hidden="true"></div>
-    <div class="app-shell">
+    <svg class="sprite" aria-hidden="true">
+      <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="9" cy="9" r="1.6" /><path d="m21 15-4.6-4.6a1.4 1.4 0 0 0-2 0L5 20" /></symbol>
+      <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="8" y="2.5" width="8" height="4" rx="1.2" /><path d="M16 4.5h1.5A2.5 2.5 0 0 1 20 7v12a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 19V7a2.5 2.5 0 0 1 2.5-2.5H8" /></symbol>
+      <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13" /></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" /></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" /></symbol>
+      <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 4v7h-7" /></symbol>
+      <symbol id="i-compare" viewBox="0 0 24 24"><path d="M12 3v18" /><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="M12 5h6.5A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5H12Z" fill="currentColor" fill-opacity=".25" stroke="none" /></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" /><circle cx="12" cy="12" r="2.8" /></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.6 5.1A9.7 9.7 0 0 1 12 5c6 0 9.5 7 9.5 7a16.6 16.6 0 0 1-2.4 3.3M6.6 6.6C3.9 8.3 2.5 12 2.5 12S6 19 12 19a9.3 9.3 0 0 0 5.4-1.6" /><path d="m3 3 18 18" /><path d="M9.9 9.9a2.8 2.8 0 0 0 4.2 4.2" /></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7" /></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2.5" /><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5" /></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5" /><path d="M4 17v1.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V17" /></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2.8 4.5 5.6v5.9c0 4.7 3.2 8.4 7.5 9.7 4.3-1.3 7.5-5 7.5-9.7V5.6Z" /><path d="m8.8 12 2.2 2.2 4.4-4.4" /></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></symbol>
+      <symbol id="i-square" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2.5" fill="currentColor" stroke="none" /></symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24"><path d="M4 4h5v5H4zM15 4h5v5h-5zM9.5 9.5h5v5h-5zM4 15h5v5H4zM15 15h5v5h-5z" fill="currentColor" stroke="none" /></symbol>
+    </svg>
+
+    <div class="app">
       <header class="topbar">
         <div class="brand">
-          <div class="brand-mark" aria-hidden="true">
-            <img class="brand-logo brand-logo-dark" src="/bullet-icon-dark.png" alt="" />
-            <img class="brand-logo brand-logo-light" src="/bullet-icon-light.png" alt="" />
-          </div>
+          <img class="brand-logo brand-logo-dark" src="/bullet-icon-dark.png" alt="" />
+          <img class="brand-logo brand-logo-light" src="/bullet-icon-light.png" alt="" />
+          <span class="brand-name">ShotShield</span>
         </div>
 
-        <div class="topbar-center">
-          <h1 class="topbar-title">ShotShield</h1>
-          <p class="tagline">Redact sensitive data. Stay private. Export clean.</p>
+        <div class="mode-switch" role="tablist" aria-label="Scan mode">
+          <button id="modeImage" class="mode-tab" role="tab" aria-selected="true" type="button">
+            <svg class="icon"><use href="#i-image" /></svg>Image
+          </button>
+          <button id="modeText" class="mode-tab" role="tab" aria-selected="false" type="button">
+            <svg class="icon"><use href="#i-text" /></svg>Text
+          </button>
         </div>
 
-        <div class="topbar-pills">
-          <span class="status-pill status-pill-gold">Local-only</span>
-          <span class="status-pill status-pill-teal">Engine ready</span>
-          <span id="headerRiskPill" class="status-pill status-pill-teal">0 protected</span>
-          <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to light theme">
-            <span class="theme-toggle-track">
-              <span class="theme-toggle-thumb"></span>
-            </span>
-            <span id="themeToggleLabel" class="theme-toggle-label">Dark</span>
+        <div class="topbar-actions">
+          <span class="badge badge-local" title="OCR and detection run on this computer. Nothing is uploaded.">
+            <svg class="icon"><use href="#i-lock" /></svg>On-device
+          </span>
+          <button id="settingsBtn" class="icon-btn" type="button" title="Detection settings" aria-label="Detection settings" aria-expanded="false" aria-controls="settingsDrawer">
+            <svg class="icon"><use href="#i-sliders" /></svg>
+          </button>
+          <button id="themeToggle" class="icon-btn" type="button" aria-label="Switch to light theme">
+            <svg class="icon icon-sun"><use href="#i-sun" /></svg>
+            <svg class="icon icon-moon"><use href="#i-moon" /></svg>
           </button>
         </div>
       </header>
 
       <div id="updateBanner" class="update-banner" hidden></div>
 
-      <div class="workspace">
-        <aside class="settings-rail">
-          <div class="panel-head">
-            <span class="panel-kicker">Detection</span>
-          </div>
-
-          <div class="settings-scroll">
-            <div id="settingsBody" class="settings-body"></div>
-
-            <section class="privacy-card">
-              <h2>On-device only</h2>
-              <p>OCR and detection run locally. Nothing leaves your machine.</p>
-            </section>
-          </div>
-        </aside>
-
-        <main class="main-column">
-          <section class="stage-section">
+      <div class="body">
+        <main class="workspace">
+          <section id="imagePane" class="pane pane-image">
             <div id="stage" class="stage">
-              <div class="stage-chrome">
-                <div class="stage-meta">
-                  <span class="stage-dot"></span>
-                  <span>Workspace</span>
-                  <span id="workspaceMeta" class="workspace-meta"></span>
+              <div id="stagePrompt" class="dropzone">
+                <div class="dropzone-icon" aria-hidden="true">
+                  <svg class="icon"><use href="#i-shield" /></svg>
                 </div>
-                <div id="workspaceRegions" class="stage-stats"></div>
+                <h1 class="dropzone-title">Drop a screenshot to scan</h1>
+                <p class="dropzone-sub">API keys, passwords, cards, IBANs, ID documents and faces — found and covered on this computer.</p>
+                <div class="dropzone-actions">
+                  <button id="pickBtn" type="button" class="btn btn-primary">
+                    <svg class="icon"><use href="#i-image" /></svg><span>Choose image</span>
+                  </button>
+                  <button id="pasteBtn" type="button" class="btn">
+                    <svg class="icon"><use href="#i-clipboard" /></svg><span>Paste</span>
+                  </button>
+                </div>
+                <p class="dropzone-hint">or press <kbd>Ctrl</kbd> <kbd>V</kbd> anywhere</p>
               </div>
 
-              <div id="stagePrompt" class="stage-prompt">
-                <div class="stage-prompt-copy">
-                  <div class="stage-prompt-art" aria-hidden="true">
-                    <img class="stage-prompt-image stage-prompt-image-dark" src="/findings-dark.png" alt="" />
-                    <img class="stage-prompt-image stage-prompt-image-light" src="/findings-light.png" alt="" />
-                  </div>
-                  <p class="stage-hint">Drop a screenshot to scan</p>
-                  <p class="stage-sub">ID cards, bank cards, API keys, faces, addresses — all scanned on-device.</p>
-                  <div class="prompt-actions">
-                    <button id="pickBtn" type="button" class="prompt-button prompt-button-primary">
-                      <svg class="prompt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <rect x="3" y="3" width="18" height="18" rx="2" />
-                        <circle cx="8.5" cy="8.5" r="1.5" />
-                        <path d="M21 15l-5-5L5 21" />
-                      </svg>
-                      Choose an image
-                    </button>
-                    <button id="pasteBtn" type="button" class="prompt-button">
-                      <svg class="prompt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <rect x="8" y="2" width="8" height="4" rx="1" />
-                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-                      </svg>
-                      Paste from clipboard
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="stage-canvas-wrap">
+              <div class="canvas-wrap">
                 <canvas id="canvas" class="canvas" hidden></canvas>
               </div>
 
               <div id="drawbox" class="draw-box" hidden></div>
-              <div id="progress" class="progress" hidden><div id="progressBar" class="progress-bar"></div></div>
+
+              <div id="progress" class="scan-status" hidden>
+                <span class="spinner" aria-hidden="true"></span>
+                <span id="progressStage" class="scan-stage">Reading</span>
+                <div class="scan-track"><div id="progressBar" class="scan-bar"></div></div>
+              </div>
+
+              <div id="stageActions" class="toolbar" role="toolbar" aria-label="Image tools" hidden>
+                <button id="rotate" class="tool" type="button" title="Rotate 90°" aria-label="Rotate 90°">
+                  <svg class="icon"><use href="#i-rotate" /></svg>
+                </button>
+                <button id="compare" class="tool" type="button" title="Hold to see the original" aria-label="Hold to see the original" hidden>
+                  <svg class="icon"><use href="#i-compare" /></svg>
+                </button>
+                <button id="toggleAll" class="tool" type="button" title="Cover / uncover all (Space)" aria-label="Cover or uncover all" hidden>
+                  <svg class="icon"><use href="#i-eye-off" /></svg>
+                </button>
+                <button id="undo" class="tool" type="button" title="Undo last box (Ctrl+Z)" aria-label="Undo last box" disabled>
+                  <svg class="icon"><use href="#i-undo" /></svg>
+                </button>
+                <span class="toolbar-sep" aria-hidden="true"></span>
+                <button id="clear" class="tool tool-danger" type="button" title="Close image" aria-label="Close image">
+                  <svg class="icon"><use href="#i-x" /></svg>
+                </button>
+              </div>
+
               <input id="file" type="file" accept="image/*" hidden />
             </div>
-
-            <p id="drawHint" class="draw-hint" hidden>
-              Drag on the image to redact a region &nbsp;·&nbsp; <kbd>Space</kbd> hide/show all &nbsp;·&nbsp; <kbd>Ctrl+Z</kbd> undo &nbsp;·&nbsp; <kbd>Ctrl+S</kbd> export
+            <p id="drawHint" class="hint-line" hidden>
+              Drag on the image to cover anything by hand
+              <span class="hint-keys"><kbd>Space</kbd> cover all <kbd>Ctrl Z</kbd> undo <kbd>Ctrl S</kbd> save</span>
             </p>
           </section>
 
-          <div id="stageActions" class="stage-actions" hidden>
-            <button id="rotate" class="tool-btn" title="Rotate 90° clockwise" hidden>Rotate</button>
-            <button id="compare" class="tool-btn" title="Press and hold to see the original" hidden>Hold to compare</button>
-            <button id="clear" class="tool-btn" title="Remove the image" hidden>Clear</button>
-
-            <div class="stage-actions-spacer"></div>
-
-            <button id="copyClipboard" class="tool-btn secondary-export" title="Copy the redacted image as PNG" hidden>Copy to clipboard</button>
-            <button id="export" class="tool-btn tool-btn-primary" title="Save the redacted image as PNG (Ctrl+S)" hidden>Export redacted</button>
-          </div>
-
-          <details class="fallback">
-            <summary>Or scan pasted text</summary>
-            <div class="fallback-body">
-              <textarea
-                id="input"
-                spellcheck="false"
-                placeholder="Paste text to scan — an .env file, a log, a config..."
-              ></textarea>
+          <section id="textPane" class="pane pane-text" hidden>
+            <div class="text-card">
+              <div class="text-card-head">
+                <span>Paste text to scan</span>
+                <span class="muted">.env files, logs, configs, chat messages</span>
+              </div>
+              <textarea id="input" spellcheck="false" placeholder="DATABASE_URL=postgres://admin:hunter2@db.internal:5432/app"></textarea>
             </div>
-          </details>
+          </section>
         </main>
 
-        <aside class="findings-panel">
-          <div class="panel-head">
-            <span class="panel-kicker">Findings</span>
-            <span id="findingsCount" class="panel-count">0</span>
-          </div>
-
-          <div class="severity-strip">
-            <span class="severity-chip severity-chip-critical"><strong id="criticalCount">0</strong> Critical</span>
-            <span class="severity-chip severity-chip-high"><strong id="highCount">0</strong> Sensitive</span>
-            <span class="severity-chip severity-chip-low"><strong id="lowCount">0</strong> Info</span>
-          </div>
-
-          <div class="findings-toolbar">
+        <aside class="inspector" aria-label="Findings">
+          <div class="inspector-head">
+            <div class="inspector-title">
+              <h2>Findings</h2>
+              <span id="findingsCount" class="count">0</span>
+            </div>
             <p id="summary" class="summary" aria-live="polite"></p>
+            <div class="meter" aria-hidden="true"><div id="meterBar" class="meter-bar"></div></div>
+            <div class="sev-filter" role="group" aria-label="Filter by severity">
+              <button class="sev-chip" data-sev="critical" type="button" aria-pressed="false"><span id="criticalCount" class="sev-num">0</span><span class="sev-name"><i></i>Critical</span></button>
+              <button class="sev-chip" data-sev="high" type="button" aria-pressed="false"><span id="highCount" class="sev-num">0</span><span class="sev-name"><i></i>High</span></button>
+              <button class="sev-chip" data-sev="medium" type="button" aria-pressed="false"><span id="mediumCount" class="sev-num">0</span><span class="sev-name"><i></i>Medium</span></button>
+              <button class="sev-chip" data-sev="low" type="button" aria-pressed="false"><span id="lowCount" class="sev-num">0</span><span class="sev-name"><i></i>Low</span></button>
+            </div>
           </div>
 
           <div id="results" class="results"></div>
 
-          <div class="findings-footer">
-            <section class="how-it-works-card" aria-labelledby="howItWorksTitle">
-              <p class="how-it-works-kicker">How it works</p>
-              <h3 id="howItWorksTitle">Local scan, review, redact, export.</h3>
-              <p class="how-it-works-copy">
-                Drop a screenshot, get instant on-device OCR and face detection, review findings, redact what you need, export clean.
-              </p>
-            </section>
+          <div class="inspector-foot">
+            <button id="copyClipboard" class="btn" type="button" title="Copy the redacted image" disabled>
+              <svg class="icon"><use href="#i-copy" /></svg><span>Copy</span>
+            </button>
+            <button id="export" class="btn btn-primary" type="button" title="Save the redacted image (Ctrl+S)" disabled>
+              <svg class="icon"><use href="#i-download" /></svg><span>Save image</span>
+            </button>
           </div>
+        </aside>
+
+        <div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
+        <aside id="settingsDrawer" class="drawer" aria-label="Detection settings" hidden>
+          <div class="drawer-head">
+            <h2>Detection</h2>
+            <button id="settingsClose" class="icon-btn" type="button" aria-label="Close settings">
+              <svg class="icon"><use href="#i-x" /></svg>
+            </button>
+          </div>
+          <div id="settingsBody" class="drawer-body"></div>
         </aside>
       </div>
 
       <footer class="statusbar">
-        <span id="statusEngine" class="statusbar-engine">Engine — idle</span>
-        <span>·</span>
-        <span><span id="statusTotal">0</span> regions</span>
-        <span>·</span>
-        <span class="statusbar-protected"><span id="statusProtected">0</span> protected</span>
-        <span id="statusExposedWrap" hidden>· <span class="statusbar-exposed"><span id="statusExposed">0</span> exposed</span></span>
-        <span class="statusbar-right">On-device · zero telemetry</span>
+        <span id="statusEngine" class="status-engine">Ready</span>
+        <span id="workspaceMeta" class="status-meta"></span>
+        <span class="status-spacer"></span>
+        <span><span id="statusProtected">0</span> covered</span>
+        <span id="statusExposedWrap" class="status-exposed" hidden><span id="statusExposed">0</span> exposed</span>
+        <span class="status-muted">No telemetry</span>
       </footer>
     </div>
   </body>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { locate, mergeRegions, needsSecondLook, SEVERITY_RANK, type Region } from "../src/redact.ts";
+import { locate, mergeRegions, needsSecondLook, redactText, SEVERITY_RANK, type Region } from "../src/redact.ts";
 import type { Detection } from "@shotshield/core";
 import type { OcrWord } from "../src/ocr.ts";
 
@@ -113,5 +113,17 @@ describe("needsSecondLook", () => {
 
   it("stays quiet when the CNP category is disabled", () => {
     expect(needsSecondLook([], "CNP ROMANIA", false)).toBe(false);
+  });
+});
+
+describe("redactText", () => {
+  it("replaces every detection and keeps the rest", () => {
+    const text = "user a@b.co pass 1234 end";
+    const out = redactText(text, [det(5, 11), det(17, 21)]);
+    expect(out).toBe("user [REDACTED] pass [REDACTED] end");
+  });
+
+  it("is a no-op with nothing detected", () => {
+    expect(redactText("clean", [])).toBe("clean");
   });
 });

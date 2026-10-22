@@ -1,65 +1,88 @@
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
+import "./styles.css";
+
 import { scan, type Detection, type Severity } from "@shotshield/core";
 import { ocr, ocrAutoOrient, ocrSecondLook, type Box, type OcrWord, type ProgressFn } from "./ocr.ts";
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
-import { locate, mergeRegions, needsSecondLook, paint, SEVERITY_RANK, type Region } from "./redact.ts";
-import { downloadCanvas } from "./export.ts";
+import { locate, mergeRegions, needsSecondLook, paint, redactText, SEVERITY_RANK, type Region } from "./redact.ts";
+import { canvasBlob, redactedName, saveCanvas } from "./export.ts";
 import { loadSettings, renderSettings, scanConfig } from "./settings.ts";
 import { checkForUpdate, type PendingUpdate } from "./update.ts";
 
-const stage = document.querySelector<HTMLDivElement>("#stage")!;
-const stagePrompt = document.querySelector<HTMLDivElement>("#stagePrompt")!;
-const canvas = document.querySelector<HTMLCanvasElement>("#canvas")!;
-const fileInput = document.querySelector<HTMLInputElement>("#file")!;
-const clearBtn = document.querySelector<HTMLButtonElement>("#clear")!;
-const exportBtn = document.querySelector<HTMLButtonElement>("#export")!;
-const rotateBtn = document.querySelector<HTMLButtonElement>("#rotate")!;
-const compareBtn = document.querySelector<HTMLButtonElement>("#compare")!;
-const input = document.querySelector<HTMLTextAreaElement>("#input")!;
-const summary = document.querySelector<HTMLParagraphElement>("#summary")!;
-const results = document.querySelector<HTMLDivElement>("#results")!;
-const drawbox = document.querySelector<HTMLDivElement>("#drawbox")!;
-const drawHint = document.querySelector<HTMLParagraphElement>("#drawHint")!;
-const progress = document.querySelector<HTMLDivElement>("#progress")!;
-const progressBar = document.querySelector<HTMLDivElement>("#progressBar")!;
-const settingsBody = document.querySelector<HTMLDivElement>("#settingsBody")!;
-const updateBanner = document.querySelector<HTMLDivElement>("#updateBanner")!;
-const copyBtn = document.querySelector<HTMLButtonElement>("#copyClipboard")!;
-const stageActions = document.querySelector<HTMLDivElement>("#stageActions")!;
-const pickBtn = document.querySelector<HTMLButtonElement>("#pickBtn")!;
-const pasteBtn = document.querySelector<HTMLButtonElement>("#pasteBtn")!;
-const statusEngine = document.querySelector<HTMLElement>("#statusEngine")!;
+const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
-// Dashboard read-outs from the redesigned shell (header pill, findings counts,
-// status bar). These were rendered but never populated — wired up below.
-const headerRiskPill = document.querySelector<HTMLElement>("#headerRiskPill")!;
-const findingsCount = document.querySelector<HTMLElement>("#findingsCount")!;
-const criticalCount = document.querySelector<HTMLElement>("#criticalCount")!;
-const highCount = document.querySelector<HTMLElement>("#highCount")!;
-const lowCount = document.querySelector<HTMLElement>("#lowCount")!;
-const statusTotal = document.querySelector<HTMLElement>("#statusTotal")!;
-const statusProtected = document.querySelector<HTMLElement>("#statusProtected")!;
-const statusExposed = document.querySelector<HTMLElement>("#statusExposed")!;
-const statusExposedWrap = document.querySelector<HTMLElement>("#statusExposedWrap")!;
-const workspaceMeta = document.querySelector<HTMLElement>("#workspaceMeta")!;
-const workspaceRegions = document.querySelector<HTMLElement>("#workspaceRegions")!;
-const themeToggle = document.querySelector<HTMLButtonElement>("#themeToggle")!;
-const themeToggleLabel = document.querySelector<HTMLElement>("#themeToggleLabel")!;
+const stage = $<HTMLDivElement>("#stage");
+const stagePrompt = $<HTMLDivElement>("#stagePrompt");
+const canvas = $<HTMLCanvasElement>("#canvas");
+const fileInput = $<HTMLInputElement>("#file");
+const clearBtn = $<HTMLButtonElement>("#clear");
+const exportBtn = $<HTMLButtonElement>("#export");
+const copyBtn = $<HTMLButtonElement>("#copyClipboard");
+const copyLabel = copyBtn.querySelector("span")!;
+const rotateBtn = $<HTMLButtonElement>("#rotate");
+const compareBtn = $<HTMLButtonElement>("#compare");
+const toggleAllBtn = $<HTMLButtonElement>("#toggleAll");
+const undoBtn = $<HTMLButtonElement>("#undo");
+const input = $<HTMLTextAreaElement>("#input");
+const summary = $<HTMLParagraphElement>("#summary");
+const results = $<HTMLDivElement>("#results");
+const drawbox = $<HTMLDivElement>("#drawbox");
+const drawHint = $<HTMLParagraphElement>("#drawHint");
+const progress = $<HTMLDivElement>("#progress");
+const progressBar = $<HTMLDivElement>("#progressBar");
+const progressStage = $<HTMLElement>("#progressStage");
+const settingsBody = $<HTMLDivElement>("#settingsBody");
+const updateBanner = $<HTMLDivElement>("#updateBanner");
+const stageActions = $<HTMLDivElement>("#stageActions");
+const pickBtn = $<HTMLButtonElement>("#pickBtn");
+const pasteBtn = $<HTMLButtonElement>("#pasteBtn");
+const statusEngine = $<HTMLElement>("#statusEngine");
+const findingsCount = $<HTMLElement>("#findingsCount");
+const meterBar = $<HTMLElement>("#meterBar");
+const statusProtected = $<HTMLElement>("#statusProtected");
+const statusExposed = $<HTMLElement>("#statusExposed");
+const statusExposedWrap = $<HTMLElement>("#statusExposedWrap");
+const workspaceMeta = $<HTMLElement>("#workspaceMeta");
+const themeToggle = $<HTMLButtonElement>("#themeToggle");
+const modeImage = $<HTMLButtonElement>("#modeImage");
+const modeText = $<HTMLButtonElement>("#modeText");
+const imagePane = $<HTMLElement>("#imagePane");
+const textPane = $<HTMLElement>("#textPane");
+const settingsBtn = $<HTMLButtonElement>("#settingsBtn");
+const settingsClose = $<HTMLButtonElement>("#settingsClose");
+const settingsDrawer = $<HTMLElement>("#settingsDrawer");
+const drawerBackdrop = $<HTMLElement>("#drawerBackdrop");
+const sevChips = [...document.querySelectorAll<HTMLButtonElement>(".sev-chip")];
+const sevCounts: Record<Severity, HTMLElement> = {
+  critical: $("#criticalCount"),
+  high: $("#highCount"),
+  medium: $("#mediumCount"),
+  low: $("#lowCount"),
+};
 
-// Detection settings (which categories run, the confidence floor), persisted.
+// Detection settings (which categories run, the confidence floor, cover style), persisted.
 const settings = loadSettings();
 
+const svgIcon = (id: string): SVGSVGElement => {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "icon");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", `#${id}`);
+  svg.append(use);
+  return svg;
+};
+
 // ── Theme ──
-// Dark by default (the design leads dark). The toggle flips to light by setting
-// data-theme on the root — the hook every CSS theme rule keys off — and the
-// choice is persisted so it survives a restart.
+// Dark by default. The toggle sets data-theme on the root — the hook every CSS
+// theme rule keys off — and the choice survives a restart.
 type Theme = "dark" | "light";
 function applyTheme(t: Theme): void {
   if (t === "light") document.documentElement.setAttribute("data-theme", "light");
   else document.documentElement.removeAttribute("data-theme");
-  themeToggle.setAttribute("aria-pressed", String(t === "light"));
   themeToggle.setAttribute("aria-label", `Switch to ${t === "light" ? "dark" : "light"} theme`);
-  themeToggleLabel.textContent = t === "light" ? "Light" : "Dark";
+  themeToggle.title = t === "light" ? "Dark theme" : "Light theme";
 }
 let theme: Theme = (() => {
   try {
@@ -74,80 +97,129 @@ themeToggle.addEventListener("click", () => {
   try {
     localStorage.setItem("shotshield.theme", theme);
   } catch {
-    /* storage unavailable (private mode, quota) — applies for this session only */
+    /* storage unavailable — applies for this session only */
   }
   applyTheme(theme);
 });
 
-// ── Dashboard read-outs ──
-// Single place that fills the header pill, findings counts and status bar from a
-// list of severities plus the protected/exposed tallies. Medium folds into the
-// "Info" bucket, the only low-tier chip the redesigned strip exposes.
-function showDashboard(
-  severities: Severity[],
-  totalRegions: number,
-  protectedCount: number,
-  exposedCount: number,
-  meta: string,
-): void {
-  let critical = 0;
-  let high = 0;
-  let low = 0;
-  for (const s of severities) {
-    if (s === "critical") critical++;
-    else if (s === "high") high++;
-    else low++;
+// ── Settings drawer ──
+function setDrawer(open: boolean): void {
+  settingsDrawer.hidden = !open;
+  drawerBackdrop.hidden = !open;
+  settingsBtn.setAttribute("aria-expanded", String(open));
+  if (open) settingsClose.focus();
+  else if (document.activeElement && settingsDrawer.contains(document.activeElement)) settingsBtn.focus();
+}
+settingsBtn.addEventListener("click", () => setDrawer(settingsDrawer.hidden));
+settingsClose.addEventListener("click", () => setDrawer(false));
+drawerBackdrop.addEventListener("click", () => setDrawer(false));
+
+// ── Mode: image or pasted text ──
+type Mode = "image" | "text";
+let mode: Mode = "image";
+function setMode(m: Mode): void {
+  mode = m;
+  modeImage.setAttribute("aria-selected", String(m === "image"));
+  modeText.setAttribute("aria-selected", String(m === "text"));
+  imagePane.hidden = m !== "image";
+  textPane.hidden = m !== "text";
+  // The footer acts on whatever the mode shows: the redacted image, or the
+  // pasted text with its findings swapped for markers.
+  exportBtn.hidden = m === "text";
+  copyLabel.textContent = m === "text" ? "Copy redacted text" : "Copy";
+  copyBtn.title = m === "text" ? "Copy the text with every finding replaced" : "Copy the redacted image";
+  copyBtn.disabled = m === "text" ? !input.value.trim() : !currentImg;
+  workspaceMeta.hidden = m === "text";
+  sevFilter = null;
+  if (m === "text") {
+    scanText();
+    input.focus();
+  } else if (currentImg) {
+    renderRegions();
+  } else {
+    showEmpty();
   }
-  findingsCount.textContent = String(severities.length);
-  criticalCount.textContent = String(critical);
-  highCount.textContent = String(high);
-  lowCount.textContent = String(low);
-  statusTotal.textContent = String(totalRegions);
+}
+modeImage.addEventListener("click", () => setMode("image"));
+modeText.addEventListener("click", () => setMode("text"));
+
+// ── Dashboard read-outs ──
+// One place that fills the counts, the coverage meter and the status bar.
+function showDashboard(severities: Severity[], protectedCount: number, exposedCount: number): void {
+  const counts: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const s of severities) counts[s]++;
+  findingsCount.textContent = String(severities.length + (mode === "image" ? manualBoxes.length : 0));
+  for (const chip of sevChips) {
+    const sev = chip.dataset.sev as Severity;
+    sevCounts[sev].textContent = String(counts[sev]);
+    // A chip that counts nothing reads dim and can't be used as a filter.
+    chip.classList.toggle("zero", counts[sev] === 0);
+    chip.setAttribute("aria-pressed", String(sevFilter === sev));
+  }
+  const total = protectedCount + exposedCount;
+  meterBar.style.width = total ? `${(protectedCount / total) * 100}%` : "0%";
+  meterBar.classList.toggle("partial", exposedCount > 0);
   statusProtected.textContent = String(protectedCount);
   statusExposed.textContent = String(exposedCount);
   statusExposedWrap.hidden = exposedCount === 0;
-  headerRiskPill.textContent = `${protectedCount} protected`;
-  // Tint the header pill red while something sensitive is still uncovered.
-  headerRiskPill.classList.toggle("status-pill-critical", exposedCount > 0);
-  headerRiskPill.classList.toggle("status-pill-teal", exposedCount === 0);
-  // Dim the chips that count nothing, so the strip reads at a glance instead
-  // of showing three equal zeros.
-  criticalCount.parentElement?.classList.toggle("severity-chip-zero", critical === 0);
-  highCount.parentElement?.classList.toggle("severity-chip-zero", high === 0);
-  lowCount.parentElement?.classList.toggle("severity-chip-zero", low === 0);
-  workspaceMeta.textContent = meta;
-  workspaceRegions.textContent =
-    totalRegions > 0 ? `${totalRegions} ${totalRegions === 1 ? "region" : "regions"}` : "";
 }
-function resetDashboard(): void {
-  showDashboard([], 0, 0, 0, "");
-}
-// Run once at startup so the zero-count chips start dimmed instead of waking
-// up only after the first scan.
-resetDashboard();
 
-// The strip names the stage it's in (Reading / Orientation / Second look /
-// Faces) so a scan feels like a pipeline, not a single opaque wait. A stage
-// with no measurable fraction runs the bar in indeterminate mode instead of
-// freezing it. The status bar's engine read-out follows along.
-function showProgress(fraction: number | null, stage = "Scanning"): void {
+// Click a severity chip to show only that severity; click again for all.
+let sevFilter: Severity | null = null;
+for (const chip of sevChips) {
+  chip.addEventListener("click", () => {
+    const sev = chip.dataset.sev as Severity;
+    sevFilter = sevFilter === sev ? null : sev;
+    if (mode === "text") scanText();
+    else renderRegions();
+  });
+}
+
+function showEmpty(): void {
+  const el = document.createElement("div");
+  el.className = "empty";
+  const title = document.createElement("strong");
+  const copy = document.createElement("span");
+  if (mode === "text") {
+    title.textContent = input.value.trim() ? "Nothing sensitive found" : "Nothing scanned yet";
+    copy.textContent = input.value.trim()
+      ? "No secrets or personal data in this text."
+      : "Paste text on the left — findings appear here as you type.";
+  } else {
+    title.textContent = "No findings yet";
+    copy.textContent = "Scan a screenshot and every detection lands here.";
+  }
+  el.append(svgIcon("i-shield"), title, copy);
+  results.classList.remove("fresh");
+  results.replaceChildren(el);
+  summary.textContent = "";
+  showDashboard([], 0, 0);
+}
+
+// The status pill names the stage the scan is in (Reading / Orientation /
+// Second look / Faces), so a scan feels like a pipeline, not one opaque wait.
+// A stage with no measurable fraction runs the bar indeterminate.
+function showProgress(fraction: number | null, label = "Scanning"): void {
   progress.hidden = false;
-  progress.dataset.stage = stage;
+  progressStage.textContent = label;
+  summary.textContent = `${label}…`;
   progressBar.classList.toggle("indeterminate", fraction === null);
   progressBar.style.width = fraction === null ? "" : `${Math.round(fraction * 100)}%`;
-  statusEngine.textContent = "Engine — scanning";
+  statusEngine.textContent = "Scanning";
+  statusEngine.classList.add("busy");
 }
 function hideProgress(): void {
   progress.hidden = true;
   progressBar.classList.remove("indeterminate");
   progressBar.style.width = "0%";
-  statusEngine.textContent = "Engine — idle";
+  statusEngine.textContent = "Ready";
+  statusEngine.classList.remove("busy");
 }
 
 // Accent used to outline a finding's region when its row is hovered. Read live
-// so it follows the active theme (the toggle swaps the --low custom property).
+// so it follows the active theme.
 function accentColor(): string {
-  return getComputedStyle(document.documentElement).getPropertyValue("--low").trim() || "#5de8e7";
+  return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#2dd4bf";
 }
 let hovered: Box[] | null = null;
 
@@ -158,50 +230,89 @@ function mask(s: string): string {
   return `${t.slice(0, 3)}…${t.slice(-2)}`;
 }
 
-// ── Text path ──
-function row(d: Detection): HTMLElement {
-  const el = document.createElement("div");
+// A finding row: severity bar, label, masked value + confidence, state badge.
+function hitRow(opts: {
+  sev: Severity | "manual";
+  label: string;
+  value: string;
+  confidence?: number;
+  state: { text: string; icon: string };
+  pressed?: boolean;
+  tag?: "button" | "div";
+  index?: number;
+}): HTMLElement {
+  const el = document.createElement(opts.tag ?? "button");
   el.className = "hit";
+  el.dataset.sev = opts.sev;
+  el.style.setProperty("--i", String(opts.index ?? 0));
+  if (el instanceof HTMLButtonElement) el.type = "button";
+  if (opts.pressed !== undefined) el.setAttribute("aria-pressed", String(opts.pressed));
 
-  const dot = document.createElement("span");
-  dot.className = `sev sev-${d.severity}`;
-  dot.title = d.severity;
-
+  const body = document.createElement("span");
+  body.className = "hit-body";
   const label = document.createElement("span");
-  label.className = "label";
-  label.textContent = d.label;
+  label.className = "hit-label";
+  label.textContent = opts.label;
+  const meta = document.createElement("span");
+  meta.className = "hit-meta";
+  const code = document.createElement("code");
+  code.textContent = opts.value;
+  meta.append(code);
+  if (opts.confidence !== undefined) {
+    const conf = document.createElement("span");
+    conf.textContent = `${Math.round(opts.confidence * 100)}%`;
+    conf.title = "Detection confidence";
+    meta.append(conf);
+  }
+  body.append(label, meta);
 
-  const match = document.createElement("code");
-  match.className = "match";
-  match.textContent = mask(d.text);
+  const state = document.createElement("span");
+  state.className = "hit-state";
+  state.append(svgIcon(opts.state.icon), opts.state.text);
 
-  el.append(dot, label, match);
+  el.append(body, state);
   return el;
 }
 
+// ── Text path ──
 function scanText(): void {
+  if (mode !== "text") return;
   if (!input.value.trim()) {
-    summary.textContent = "";
-    results.replaceChildren();
-    resetDashboard();
+    copyBtn.disabled = true;
+    showEmpty();
     return;
   }
   const dets = scan(input.value, scanConfig(settings));
+  copyBtn.disabled = false;
+  if (dets.length === 0) {
+    showEmpty();
+    summary.textContent = "Nothing sensitive found";
+    return;
+  }
+  const shown = dets
+    .filter((d) => !sevFilter || d.severity === sevFilter)
+    .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
   // Text results re-render on every keystroke — no entrance animation, or the
   // list would flicker while typing.
-  results.classList.add("settled");
-  results.replaceChildren(...dets.map(row));
-  summary.textContent = dets.length === 0 ? "Nothing sensitive found." : `${dets.length} found`;
-  // Pasted text is only flagged, never covered — count every hit as exposed.
-  showDashboard(
-    dets.map((d) => d.severity),
-    dets.length,
-    0,
-    dets.length,
-    dets.length > 0 ? "Pasted text" : "",
+  results.classList.remove("fresh");
+  results.replaceChildren(
+    ...shown.map((d: Detection) => {
+      const row = hitRow({
+        sev: d.severity,
+        label: d.label,
+        value: mask(d.text),
+        confidence: d.confidence,
+        state: { text: "Found", icon: "i-eye" },
+        tag: "div",
+      });
+      row.classList.add("hit-static");
+      return row;
+    }),
   );
+  summary.textContent = `${dets.length} ${dets.length === 1 ? "thing" : "things"} to remove before sharing`;
+  // Pasted text is only flagged, never covered — every hit counts as exposed.
+  showDashboard(dets.map((d) => d.severity), 0, dets.length);
 }
-
 input.addEventListener("input", scanText);
 
 // Re-run whatever is on screen when a setting changes — the text scan, and the
@@ -217,11 +328,11 @@ renderSettings(settingsBody, settings, onSettingsChange);
 let gen = 0;
 let currentImg: HTMLImageElement | null = null;
 let sourceImg: HTMLImageElement | null = null; // the image as shown (post-rotation), for re-rotating
+let sourceName: string | null = null;
 let regions: Region[] = [];
 let manualBoxes: Box[] = []; // hand-drawn redaction rectangles, in image-pixel space
 // Undo/redo history for the manual boxes: each entry is a full snapshot of the
-// list. Adding, removing or Delete-ing a box pushes the prior state here first,
-// so Ctrl+Z / Ctrl+Y step through them. Both are reset when the image changes.
+// list. Both are reset when the image changes.
 let undoStack: Box[][] = [];
 let redoStack: Box[][] = [];
 // The OCR passes for the current image (one, or two when the second look ran),
@@ -229,6 +340,8 @@ let redoStack: Box[][] = [];
 // again. Detected faces are cached the same way.
 let lastOcr: { text: string; words: OcrWord[] }[] = [];
 let lastFaces: Region[] = [];
+
+showEmpty();
 
 function displayImage(img: HTMLImageElement): void {
   sourceImg = img;
@@ -238,10 +351,9 @@ function displayImage(img: HTMLImageElement): void {
   canvas.hidden = false;
   stagePrompt.hidden = true;
   stageActions.hidden = false;
-  clearBtn.hidden = false;
-  rotateBtn.hidden = false;
   drawHint.hidden = false;
   stage.classList.add("has-image");
+  workspaceMeta.textContent = `${img.naturalWidth} × ${img.naturalHeight}`;
 }
 
 async function scanImage(
@@ -249,24 +361,18 @@ async function scanImage(
   token: number,
   opts: { autoOrient: boolean },
 ): Promise<void> {
-  summary.textContent = "Reading image…";
   results.replaceChildren();
+  exportBtn.disabled = true;
+  copyBtn.disabled = true;
   showProgress(0, "Reading");
 
   // Both OCR passes report the same "reading" phase; this flag relabels the
-  // second one so the progress strip tells them apart.
+  // second one so the status pill tells them apart.
   let secondPass = false;
   const onProgress: ProgressFn = (phase, fraction) => {
     if (token !== gen) return;
-    if (phase === "orienting") {
-      summary.textContent = "Checking orientation…";
-      showProgress(fraction, "Orientation");
-    } else {
-      summary.textContent = secondPass
-        ? "Taking a closer look…"
-        : `Reading image… ${Math.round(fraction * 100)}%`;
-      showProgress(fraction, secondPass ? "Second look" : "Reading");
-    }
+    if (phase === "orienting") showProgress(fraction, "Checking orientation");
+    else showProgress(fraction, secondPass ? "Taking a closer look" : "Reading text");
   };
 
   let text = "";
@@ -307,9 +413,8 @@ async function scanImage(
   // passes. Best-effort: a retry failure must not drop the first pass.
   const firstDets = scan(text, scanConfig(settings));
   if (needsSecondLook(firstDets, text, settings.enabled.national_id ?? true)) {
-    summary.textContent = "Taking a closer look…";
     secondPass = true;
-    showProgress(0, "Second look");
+    showProgress(0, "Taking a closer look");
     try {
       const second = await ocrSecondLook(working, onProgress);
       if (token !== gen) return;
@@ -323,8 +428,7 @@ async function scanImage(
   // Faces are best-effort and detected once per image, then cached: a model-load
   // failure must not drop the text findings, and toggling the Faces setting later
   // shouldn't re-run the detector.
-  summary.textContent = "Looking for faces…";
-  showProgress(null, "Faces"); // no per-face progress — run the bar indeterminate
+  showProgress(null, "Looking for faces");
   lastFaces = [];
   try {
     const { detectFaces } = await import("./faces.ts");
@@ -355,10 +459,12 @@ function recomputeRegions(fresh = false): void {
   }
   const faceRegions = settings.faces ? lastFaces : [];
   regions = [...textRegions, ...faceRegions];
-  paint(canvas, currentImg, regions, manualBoxes);
-  renderRegions(fresh);
-  exportBtn.hidden = false;
-  copyBtn.hidden = false;
+  repaint();
+  exportBtn.disabled = false;
+  if (mode === "image") {
+    copyBtn.disabled = false;
+    renderRegions(fresh);
+  }
 }
 
 // Wrap a detected face as a redaction region, so it lists, toggles, paints and
@@ -385,79 +491,70 @@ function faceRegion(hit: FaceHit): Region {
 // animation. Re-renders (toggling a region, changing a setting, undo) keep the
 // list still — replaying the entrance on every click reads as flicker.
 function renderRegions(fresh = false): void {
-  results.classList.toggle("settled", !fresh);
+  undoBtn.disabled = undoStack.length === 0;
+  const hiddenCount = regions.filter((r) => r.hidden).length;
+  const exposedCount = regions.length - hiddenCount;
+  compareBtn.hidden = !(hiddenCount > 0 || manualBoxes.length > 0);
+  toggleAllBtn.hidden = regions.length === 0;
+  toggleAllBtn.replaceChildren(svgIcon(exposedCount > 0 ? "i-eye-off" : "i-eye"));
+  toggleAllBtn.title = exposedCount > 0 ? "Cover all (Space)" : "Uncover all (Space)";
+
+  if (regions.length === 0 && manualBoxes.length === 0) {
+    showEmpty();
+    summary.textContent = currentImg ? "Nothing sensitive found" : "";
+    const empty = results.querySelector(".empty");
+    if (currentImg && empty) {
+      empty.querySelector("strong")!.textContent = "Nothing sensitive found";
+      empty.querySelector("span")!.textContent = "Drag on the image to cover anything by hand.";
+    }
+    return;
+  }
+
+  results.classList.toggle("fresh", fresh);
   // Scariest first: a critical hit should never hide below the fold.
   const ordered = regions
     .map((region, index) => ({ region, index }))
+    .filter(({ region }) => !sevFilter || region.detection.severity === sevFilter)
     .sort(
       (a, b) =>
         SEVERITY_RANK[a.region.detection.severity] - SEVERITY_RANK[b.region.detection.severity],
     );
   results.replaceChildren(
-    ...ordered.map(({ region, index }) => regionRow(region, index)),
-    ...manualBoxes.map(manualRow),
+    ...ordered.map(({ region, index }, i) => regionRow(region, index, i)),
+    ...(sevFilter ? [] : manualBoxes.map((b, i) => manualRow(b, i, ordered.length + i))),
   );
 
   const parts: string[] = [];
-  if (regions.length > 0) {
-    const hidden = regions.filter((r) => r.hidden).length;
-    parts.push(`${hidden} of ${regions.length} hidden`);
-  }
-  if (manualBoxes.length > 0) parts.push(`${manualBoxes.length} manual`);
-  summary.textContent =
-    parts.length > 0
-      ? parts.join(" · ")
-      : "Nothing sensitive found — drag on the image to redact anything by hand.";
+  if (regions.length > 0) parts.push(`${hiddenCount} of ${regions.length} covered`);
+  if (manualBoxes.length > 0) parts.push(`${manualBoxes.length} drawn by hand`);
+  summary.textContent = parts.join(" · ");
 
-  // Compare only makes sense once something is actually covered.
-  compareBtn.hidden = !(regions.some((r) => r.hidden) || manualBoxes.length > 0);
-
-  // Manual boxes count toward what's protected, but only auto detections feed the
-  // findings/severity read-outs — a hand-drawn box isn't a "finding".
-  const protectedCount = regions.filter((r) => r.hidden).length + manualBoxes.length;
-  const exposedCount = regions.filter((r) => !r.hidden).length;
+  // Hand-drawn boxes count toward what's covered, but only detections feed the
+  // severity read-outs — a box isn't a "finding".
   showDashboard(
     regions.map((r) => r.detection.severity),
-    regions.length + manualBoxes.length,
-    protectedCount,
+    hiddenCount + manualBoxes.length,
     exposedCount,
-    currentImg ? `${currentImg.naturalWidth}×${currentImg.naturalHeight}` : "",
   );
 }
 
 // A finding row in image mode is a toggle: click to cover/uncover its region.
-function regionRow(region: Region, index: number): HTMLElement {
-  const el = document.createElement("button");
-  el.type = "button";
-  el.className = "hit hit-toggle";
-  el.setAttribute("aria-pressed", String(region.hidden));
-
-  const dot = document.createElement("span");
-  dot.className = `sev sev-${region.detection.severity}`;
-  dot.title = region.detection.severity;
-
-  const label = document.createElement("span");
-  label.className = "label";
-  label.textContent = region.detection.label;
-
-  const match = document.createElement("code");
-  match.className = "match";
-  // A face has no text to mask — show its size instead.
-  match.textContent =
-    region.detection.category === "face"
-      ? `${Math.round(region.boxes[0]?.w ?? 0)}×${Math.round(region.boxes[0]?.h ?? 0)} px`
-      : mask(region.detection.text);
-
-  const conf = document.createElement("span");
-  conf.className = "conf";
-  conf.textContent = `${Math.round(region.detection.confidence * 100)}%`;
-  conf.title = "detection confidence";
-
-  const pill = document.createElement("span");
-  pill.className = "pill";
-  pill.textContent = region.hidden ? "Hidden" : "Visible";
-
-  el.append(dot, label, match, conf, pill);
+function regionRow(region: Region, index: number, position: number): HTMLElement {
+  const d = region.detection;
+  const el = hitRow({
+    sev: d.severity,
+    label: d.label,
+    // A face has no text to mask — show its size instead.
+    value:
+      d.category === "face"
+        ? `${Math.round(region.boxes[0]?.w ?? 0)} × ${Math.round(region.boxes[0]?.h ?? 0)} px`
+        : mask(d.text),
+    confidence: d.confidence,
+    state: region.hidden ? { text: "Covered", icon: "i-eye-off" } : { text: "Visible", icon: "i-eye" },
+    pressed: region.hidden,
+    index: position,
+  });
+  el.title = region.hidden ? "Click to uncover" : "Click to cover";
   el.addEventListener("click", () => toggle(index));
   el.addEventListener("mouseenter", () => setHover(region.boxes));
   el.addEventListener("mouseleave", () => setHover(null));
@@ -476,13 +573,10 @@ function toggle(index: number): void {
 }
 
 // ── Manual redaction ──
-// Drag anywhere on the image to black out a region the scan can't catch — a
-// face, an address, a signature. Boxes are stored in image-pixel space so they
-// survive the canvas being scaled to fit, and painted onto the canvas itself so
-// the saved PNG carries them.
-// Snapshot the manual boxes before a mutation so it can be undone. Clearing the
-// redo stack on a fresh edit is standard undo semantics: the new action becomes
-// the tip, and the abandoned redo branch is dropped.
+// Drag anywhere on the image to cover a region the scan can't catch — an
+// address, a signature. Boxes are stored in image-pixel space so they survive
+// the canvas being scaled to fit, and painted onto the canvas itself so the
+// saved PNG carries them.
 function pushManualHistory(): void {
   undoStack.push(manualBoxes.map((b) => ({ ...b })));
   redoStack = [];
@@ -503,6 +597,7 @@ function redoManual(): void {
   repaint();
   renderRegions();
 }
+undoBtn.addEventListener("click", undoManual);
 
 // Cover or uncover every detected region at once (Space). While anything is
 // still visible, hide it all; once everything's hidden, the next press reveals it.
@@ -513,10 +608,11 @@ function toggleAllRegions(): void {
   repaint();
   renderRegions();
 }
+toggleAllBtn.addEventListener("click", toggleAllRegions);
 
 function repaint(): void {
   if (!currentImg) return;
-  paint(canvas, currentImg, regions, manualBoxes);
+  paint(canvas, currentImg, regions, manualBoxes, settings.cover);
   if (hovered) {
     const ctx = canvas.getContext("2d")!;
     ctx.save();
@@ -534,48 +630,31 @@ function setHover(boxes: Box[] | null): void {
 }
 
 // Hold the Compare button to redraw the image without its redactions — a quick
-// before/after to confirm the boxes cover the right thing. Releasing repaints the
-// redacted view. (A press-and-hold button, not a slider, so it doesn't fight the
-// canvas's drag-to-redact gesture.)
-function peekOriginal(): void {
-  if (currentImg) canvas.getContext("2d")!.drawImage(currentImg, 0, 0);
-}
+// before/after. A press-and-hold button, not a slider, so it doesn't fight the
+// canvas's drag-to-redact gesture.
 compareBtn.addEventListener("pointerdown", (e) => {
   e.preventDefault();
-  peekOriginal();
+  if (currentImg) canvas.getContext("2d")!.drawImage(currentImg, 0, 0);
 });
 for (const ev of ["pointerup", "pointerleave", "pointercancel"]) {
   compareBtn.addEventListener(ev, () => repaint());
 }
 
-// A manual box, listed beside the auto findings. Clicking the row removes it.
-function manualRow(box: Box, index: number): HTMLElement {
-  const el = document.createElement("button");
-  el.type = "button";
-  el.className = "hit hit-toggle";
-  el.setAttribute("aria-pressed", "true");
-
-  const dot = document.createElement("span");
-  dot.className = "sev sev-critical";
-  dot.title = "manual";
-
-  const label = document.createElement("span");
-  label.className = "label";
-  label.textContent = "Redacted area";
-
-  const size = document.createElement("code");
-  size.className = "match";
-  size.textContent = `${Math.round(box.w)}×${Math.round(box.h)}`;
-
-  const pill = document.createElement("span");
-  pill.className = "pill";
-  pill.textContent = "Remove";
-
-  el.append(dot, label, size, pill);
+// A hand-drawn box, listed beside the findings. Clicking the row removes it.
+function manualRow(box: Box, index: number, position: number): HTMLElement {
+  const el = hitRow({
+    sev: "manual",
+    label: "Drawn by hand",
+    value: `${Math.round(box.w)} × ${Math.round(box.h)} px`,
+    state: { text: "Remove", icon: "i-trash" },
+    pressed: true,
+    index: position,
+  });
+  el.classList.add("hit-manual");
   el.addEventListener("click", () => {
     pushManualHistory();
     manualBoxes.splice(index, 1);
-    repaint();
+    setHover(null);
     renderRegions();
   });
   el.addEventListener("mouseenter", () => setHover([box]));
@@ -608,12 +687,16 @@ canvas.addEventListener("pointerdown", (e) => {
 
 canvas.addEventListener("pointermove", (e) => {
   if (!drag) return;
-  // The live preview rectangle is drawn in the stage's own coordinate space.
+  // The live preview rectangle is drawn in the stage's own coordinate space,
+  // clamped to the image so it never spills past the edge.
   const s = stage.getBoundingClientRect();
-  drawbox.style.left = `${Math.min(drag.cx, e.clientX) - s.left}px`;
-  drawbox.style.top = `${Math.min(drag.cy, e.clientY) - s.top}px`;
-  drawbox.style.width = `${Math.abs(e.clientX - drag.cx)}px`;
-  drawbox.style.height = `${Math.abs(e.clientY - drag.cy)}px`;
+  const c = canvas.getBoundingClientRect();
+  const ex = Math.max(c.left, Math.min(c.right, e.clientX));
+  const ey = Math.max(c.top, Math.min(c.bottom, e.clientY));
+  drawbox.style.left = `${Math.min(drag.cx, ex) - s.left}px`;
+  drawbox.style.top = `${Math.min(drag.cy, ey) - s.top}px`;
+  drawbox.style.width = `${Math.abs(ex - drag.cx)}px`;
+  drawbox.style.height = `${Math.abs(ey - drag.cy)}px`;
   drawbox.hidden = false;
 });
 
@@ -627,8 +710,7 @@ canvas.addEventListener("pointerup", (e) => {
   const h = Math.abs(end.y - drag.y);
   drag = null;
   // Require a real, big-enough rectangle. Written as `>=` so a NaN (e.g. a
-  // zero-size canvas rect) fails the test instead of slipping through, the way
-  // `w < 6` would.
+  // zero-size canvas rect) fails the test instead of slipping through.
   if (!(w >= 6 && h >= 6)) return;
   pushManualHistory();
   manualBoxes.push({ x, y, w, h });
@@ -658,9 +740,11 @@ function loadImage(src: string, opts: { autoOrient: boolean }, token: number): v
       // A fresh image starts with no manual boxes and no settled OCR image, so
       // drawing stays disabled until this load's OCR pass finishes.
       currentImg = null;
+      regions = [];
       manualBoxes = [];
       undoStack = [];
       redoStack = [];
+      sevFilter = null;
       displayImage(img);
       void scanImage(img, token, opts);
     })
@@ -671,7 +755,9 @@ function loadImage(src: string, opts: { autoOrient: boolean }, token: number): v
 
 function handleFile(file: File | null | undefined): void {
   if (!file || !file.type.startsWith("image/")) return;
+  if (mode !== "image") setMode("image");
   const token = ++gen;
+  sourceName = file.name;
   const reader = new FileReader();
   reader.addEventListener("load", () =>
     loadImage(reader.result as string, { autoOrient: true }, token),
@@ -683,28 +769,28 @@ function clearImage(): void {
   gen++;
   currentImg = null;
   sourceImg = null;
+  sourceName = null;
   regions = [];
   manualBoxes = [];
   undoStack = [];
   redoStack = [];
   lastOcr = [];
   lastFaces = [];
+  sevFilter = null;
   canvas.hidden = true;
   drawbox.hidden = true;
   stagePrompt.hidden = false;
   stageActions.hidden = true;
-  clearBtn.hidden = true;
-  rotateBtn.hidden = true;
   compareBtn.hidden = true;
-  exportBtn.hidden = true;
-  copyBtn.hidden = true;
+  toggleAllBtn.hidden = true;
+  exportBtn.disabled = true;
+  copyBtn.disabled = true;
   drawHint.hidden = true;
+  workspaceMeta.textContent = "";
   hideProgress();
   hovered = null;
   stage.classList.remove("has-image");
-  summary.textContent = "";
-  results.replaceChildren();
-  resetDashboard();
+  showEmpty();
 }
 
 const canPick = () => !stage.classList.contains("has-image");
@@ -716,8 +802,8 @@ pickBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   if (canPick()) fileInput.click();
 });
-// Read an image straight from the clipboard — the button must do what it says,
-// not fall through to the file picker.
+// Read an image straight from the clipboard. Some WebViews refuse the async
+// clipboard API; Ctrl+V (the paste event below) always works, so say so.
 pasteBtn.addEventListener("click", async (e) => {
   e.stopPropagation();
   try {
@@ -730,10 +816,10 @@ pasteBtn.addEventListener("click", async (e) => {
         return;
       }
     }
-    flash(pasteBtn, "No image in clipboard");
+    flash(pasteBtn, "No image copied");
   } catch (err) {
     console.error("Clipboard read failed", err);
-    flash(pasteBtn, "Clipboard blocked");
+    flash(pasteBtn, "Use Ctrl+V");
   }
 });
 fileInput.addEventListener("change", () => {
@@ -743,32 +829,51 @@ fileInput.addEventListener("change", () => {
   fileInput.value = "";
 });
 clearBtn.addEventListener("click", clearImage);
-exportBtn.addEventListener("click", () => {
-  downloadCanvas(canvas, "shotshield-redacted.png");
-  flash(exportBtn, "Exported ✓");
-});
 
-// Briefly swap a button's label to confirm an action, then restore it.
+async function exportImage(): Promise<void> {
+  if (exportBtn.disabled) return;
+  try {
+    const result = await saveCanvas(canvas, redactedName(sourceName));
+    if (result !== "cancelled") flash(exportBtn, "Saved");
+  } catch (err) {
+    console.error("Save failed", err);
+    flash(exportBtn, "Save failed");
+  }
+}
+exportBtn.addEventListener("click", () => void exportImage());
+
+// Briefly swap a button's label to confirm an action, then restore it. Only the
+// label span changes, so the button's icon survives.
 function flash(btn: HTMLButtonElement, msg: string): void {
-  const original = btn.textContent;
+  const label = btn.querySelector("span") ?? btn;
+  const original = label.textContent;
   btn.disabled = true;
-  btn.textContent = msg;
+  label.textContent = msg;
   setTimeout(() => {
-    btn.textContent = original;
+    label.textContent = original;
     btn.disabled = false;
-  }, 1200);
+  }, 1300);
 }
 
 // Copy the redacted canvas (boxes already baked in) to the clipboard as a PNG.
 copyBtn.addEventListener("click", async () => {
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-  if (!blob) return;
+  if (mode === "text") {
+    try {
+      await navigator.clipboard.writeText(redactText(input.value, scan(input.value, scanConfig(settings))));
+      flash(copyBtn, "Copied");
+    } catch (err) {
+      console.error("Clipboard copy failed", err);
+      flash(copyBtn, "Failed");
+    }
+    return;
+  }
   try {
+    const blob = await canvasBlob(canvas);
     await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
     flash(copyBtn, "Copied");
   } catch (err) {
     console.error("Clipboard copy failed", err);
-    flash(copyBtn, "Copy failed");
+    flash(copyBtn, "Failed");
   }
 });
 rotateBtn.addEventListener("click", () => {
@@ -778,13 +883,21 @@ rotateBtn.addEventListener("click", () => {
   loadImage(orientedCanvas(sourceImg, 1).toDataURL("image/png"), { autoOrient: false }, token);
 });
 
-stage.addEventListener("dragover", (e) => {
-  e.preventDefault();
+// Drag and drop anywhere in the window lands on the stage.
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => {
+  if (!e.dataTransfer?.types.includes("Files")) return;
+  dragDepth++;
   stage.classList.add("dragover");
 });
-stage.addEventListener("dragleave", () => stage.classList.remove("dragover"));
-stage.addEventListener("drop", (e) => {
+window.addEventListener("dragleave", () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) stage.classList.remove("dragover");
+});
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => {
   e.preventDefault();
+  dragDepth = 0;
   stage.classList.remove("dragover");
   handleFile(e.dataTransfer?.files?.[0]);
 });
@@ -797,12 +910,16 @@ window.addEventListener("paste", (e) => {
 
 // ── Keyboard shortcuts ──
 // Space toggles every region, Ctrl/Cmd+Z and Ctrl+Shift+Z / Ctrl+Y undo and redo
-// the manual boxes, Ctrl/Cmd+S exports, Delete drops the last manual box. All are
-// suppressed while the pasted-text box has focus so normal typing is untouched.
+// the manual boxes, Ctrl/Cmd+S saves, Ctrl+O opens, Delete drops the last box,
+// Escape closes the drawer. Suppressed while typing in the text box.
 function inEditable(t: EventTarget | null): boolean {
   return t instanceof HTMLTextAreaElement || t instanceof HTMLInputElement;
 }
 window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !settingsDrawer.hidden) {
+    setDrawer(false);
+    return;
+  }
   if (inEditable(e.target)) return;
   const mod = e.ctrlKey || e.metaKey;
 
@@ -815,7 +932,11 @@ window.addEventListener("keydown", (e) => {
     redoManual();
   } else if (mod && (e.key === "s" || e.key === "S")) {
     e.preventDefault();
-    if (!exportBtn.hidden) downloadCanvas(canvas, "shotshield-redacted.png");
+    void exportImage();
+  } else if (mod && (e.key === "o" || e.key === "O")) {
+    e.preventDefault();
+    if (mode !== "image") setMode("image");
+    fileInput.click();
   } else if (e.key === " " && !mod && !(e.target instanceof HTMLButtonElement)) {
     // Don't steal Space from a focused button (a finding row toggles itself).
     if (!currentImg || regions.length === 0) return;
@@ -841,12 +962,12 @@ function showUpdateBanner(update: PendingUpdate): void {
 
   const action = document.createElement("button");
   action.type = "button";
-  action.className = "tool-btn tool-btn-primary update-action";
+  action.className = "btn btn-primary";
   action.textContent = "Update & restart";
 
   const later = document.createElement("button");
   later.type = "button";
-  later.className = "tool-btn update-later";
+  later.className = "btn";
   later.textContent = "Later";
   later.addEventListener("click", () => (updateBanner.hidden = true));
 

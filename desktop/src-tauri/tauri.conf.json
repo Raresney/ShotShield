@@ -14,10 +14,10 @@
     "windows": [
       {
         "title": "ShotShield",
-        "width": 960,
-        "height": 720,
-        "minWidth": 640,
-        "minHeight": 480,
+        "width": 1280,
+        "height": 820,
+        "minWidth": 900,
+        "minHeight": 600,
         "dragDropEnabled": false
       }
     ],

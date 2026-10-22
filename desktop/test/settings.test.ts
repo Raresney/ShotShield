@@ -8,6 +8,7 @@ describe("loadSettings", () => {
     const s = loadSettings();
     expect(s.faces).toBe(true);
     expect(s.minConfidence).toBe(0);
+    expect(s.cover).toBe("solid");
     expect(s.enabled.email).toBe(true);
     expect(s.enabled.national_id).toBe(true);
   });
@@ -24,6 +25,13 @@ describe("loadSettings", () => {
     expect(s.minConfidence).toBe(0.5);
   });
 
+  it("keeps a saved cover style and rejects unknown ones", () => {
+    localStorage.setItem("shotshield.settings", JSON.stringify({ cover: "mosaic" }));
+    expect(loadSettings().cover).toBe("mosaic");
+    localStorage.setItem("shotshield.settings", JSON.stringify({ cover: "blur" }));
+    expect(loadSettings().cover).toBe("solid");
+  });
+
   it("falls back to defaults on corrupt storage", () => {
     localStorage.setItem("shotshield.settings", "{ not json");
     const s = loadSettings();
@@ -34,7 +42,7 @@ describe("loadSettings", () => {
 
 describe("scanConfig", () => {
   it("forwards the enabled map and confidence floor to the scanner", () => {
-    const cfg = scanConfig({ enabled: { email: false }, faces: true, minConfidence: 0.3 });
+    const cfg = scanConfig({ enabled: { email: false }, faces: true, minConfidence: 0.3, cover: "solid" });
     expect(cfg.enabled?.email).toBe(false);
     expect(cfg.minConfidence).toBe(0.3);
   });
