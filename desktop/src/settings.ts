@@ -9,6 +9,7 @@ import type { Category, ScanConfig } from "@shotshield/core";
 // rules aren't editable from here yet — so they're left out of this list.
 const CATEGORIES: { cat: Category; label: string }[] = [
   { cat: "api_key", label: "API keys & tokens" },
+  { cat: "credential", label: "Passwords & credentials" },
   { cat: "jwt", label: "JWT" },
   { cat: "credit_card", label: "Payment cards" },
   { cat: "cvv", label: "Card security codes" },
@@ -21,6 +22,8 @@ const CATEGORIES: { cat: Category; label: string }[] = [
   { cat: "name", label: "Names" },
   { cat: "email", label: "Email addresses" },
   { cat: "phone", label: "Phone numbers" },
+  { cat: "crypto_wallet", label: "Crypto wallets" },
+  { cat: "ip_address", label: "Public IP addresses" },
 ];
 
 export interface Settings {
