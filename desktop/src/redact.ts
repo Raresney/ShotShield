@@ -68,6 +68,22 @@ export function needsSecondLook(dets: Detection[], text: string, cnpEnabled: boo
 }
 
 /**
+ * The pasted text with every detection replaced by a marker, ready to share.
+ * Detections never overlap (the scanner resolves that), so a right-to-left
+ * splice keeps every offset valid.
+ */
+export function redactText(text: string, dets: Detection[]): string {
+  let out = text;
+  for (const d of [...dets].sort((a, b) => b.start - a.start)) {
+    out = out.slice(0, d.start) + "[REDACTED]" + out.slice(d.end);
+  }
+  return out;
+}
+
+/** How a covered region is drawn: a solid fill, or a generated mosaic. */
+export type CoverStyle = "solid" | "mosaic";
+
+/**
  * Redraw the image, cover every hidden detection region, then lay the
  * hand-drawn boxes on top. Everything lands on the canvas, so the export
  * (which just reads the canvas back) carries the manual redactions too.
@@ -77,20 +93,66 @@ export function paint(
   img: HTMLImageElement,
   regions: Region[],
   manual: Box[] = [],
+  style: CoverStyle = "solid",
 ): void {
   const ctx = canvas.getContext("2d")!;
   ctx.drawImage(img, 0, 0);
-  ctx.fillStyle = "#0a0a0a";
+  const rects: Box[] = [];
   for (const region of regions) {
     if (!region.hidden) continue;
     for (const b of region.boxes) {
       // Pad a hair so descenders and antialiased edges are fully covered.
       const pad = Math.max(2, b.h * 0.15);
-      ctx.fillRect(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2);
+      rects.push({ x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 });
     }
   }
   // Manual boxes are exactly what the user dragged — no padding.
-  for (const b of manual) {
-    ctx.fillRect(b.x, b.y, b.w, b.h);
+  rects.push(...manual);
+  for (const r of rects) cover(ctx, r, style);
+}
+
+function cover(ctx: CanvasRenderingContext2D, r: Box, style: CoverStyle): void {
+  if (style === "mosaic") mosaic(ctx, r);
+  else {
+    ctx.fillStyle = "#0a0a0a";
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+  }
+}
+
+/**
+ * A mosaic that carries no information about what it covers. Real pixelation
+ * averages each block of the source, and averaged text can be brute-forced
+ * back (render candidate strings, pixelate, compare). Here only the region's
+ * single overall mean colour is read; every block is that mean plus seeded
+ * noise, so the pattern depends on the box position, never on the content.
+ */
+export function mosaic(ctx: CanvasRenderingContext2D, r: Box): void {
+  const x = Math.max(0, Math.floor(r.x));
+  const y = Math.max(0, Math.floor(r.y));
+  const w = Math.min(ctx.canvas.width - x, Math.ceil(r.w + (r.x - x)));
+  const h = Math.min(ctx.canvas.height - y, Math.ceil(r.h + (r.y - y)));
+  if (!(w > 0 && h > 0)) return;
+
+  const px = ctx.getImageData(x, y, w, h).data;
+  let red = 0, green = 0, blue = 0;
+  const n = px.length / 4;
+  for (let i = 0; i < px.length; i += 4) {
+    red += px[i]!;
+    green += px[i + 1]!;
+    blue += px[i + 2]!;
+  }
+  // Pull the mean toward mid-grey so a mostly-white text box still reads as covered.
+  const mean = [red / n, green / n, blue / n].map((c) => c * 0.55 + 128 * 0.45 - 24);
+
+  const block = Math.max(6, Math.round(Math.min(w, h) / 3));
+  let seed = (x * 73856093) ^ (y * 19349663) ^ (w * 83492791);
+  const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  for (let by = y; by < y + h; by += block) {
+    for (let bx = x; bx < x + w; bx += block) {
+      const j = (rand() - 0.5) * 70;
+      const [cr, cg, cb] = mean.map((c) => Math.max(0, Math.min(255, Math.round(c + j))));
+      ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
+      ctx.fillRect(bx, by, Math.min(block, x + w - bx), Math.min(block, y + h - by));
+    }
   }
 }
