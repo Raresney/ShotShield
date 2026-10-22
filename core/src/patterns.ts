@@ -150,12 +150,25 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     source: "(?<=\\bAuthorization:?[ ]{0,3}Basic[ ]{1,3})[A-Za-z0-9+/]{8,}={0,2}", flags: "i", baseConfidence: 0.92 },
   // scheme://user:password@host — connection strings and URLs with the login
   // baked in. The whole URL is covered: the host is half the leak.
+  // OCR sometimes puts a space after the scheme colon ("postgres: //").
   { category: "credential", label: "Credentials in URL", severity: "critical",
-    source: "\\b[A-Za-z][A-Za-z0-9+.-]{1,15}://[^\\s:/@]{1,64}:[^\\s@/]{1,128}@[^\\s/?#]{1,253}",
+    source: "\\b[A-Za-z][A-Za-z0-9+.-]{1,15}: ?//[^\\s:/@]{1,64}:[^\\s@/]{1,128}@[^\\s/?#]{1,253}",
     baseConfidence: 0.9,
     refine: (raw) => {
-      const pass = raw.slice(raw.indexOf("://") + 3).split("@")[0]!.split(":").slice(1).join(":");
+      const pass = raw.slice(raw.indexOf("//") + 2).split("@")[0]!.split(":").slice(1).join(":");
       return looksLikeSecretValue(pass) ? {} : false;
+    } },
+  // A database / mail / file-transfer URL with `user:` in it carries a
+  // password even when OCR lost the `@` (a monospace @ often reads as Q). The
+  // scheme is the precision here; the part after `user:` must hold a letter, so
+  // a bare `host:port` (redis://cache:6379) never matches.
+  { category: "credential", label: "Credentials in URL", severity: "critical",
+    source: "\\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\\+srv)?|rediss?|amqps?|mssql|sqlserver|s?ftps?|smtps?|ldaps?): ?//[^\\s:/@]{1,64}:[^\\s/]{1,200}",
+    baseConfidence: 0.85,
+    refine: (raw) => {
+      const rest = raw.slice(raw.indexOf("//") + 2);
+      const pass = rest.slice(rest.indexOf(":") + 1).split("@")[0]!;
+      return /[A-Za-z]/.test(pass) && pass.length >= 6 && looksLikeSecretValue(pass) ? {} : false;
     } },
 
   // ── JWT ─────────────────────────────────────────────────────────────────
@@ -182,9 +195,16 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // The leading lookbehind stops the country-code pair from starting inside a
   // longer token — e.g. the "OU82…" buried in an ID's "IDROU82…" MRZ line,
   // which could otherwise clear mod-97 by chance.
+  // A monospace O often reads as 0 (RO49 -> R049), so the country code's second
+  // letter may come back as 0/1; mod-97 decides whether the O/I reading holds.
   { category: "iban", label: "IBAN", severity: "high",
-    source: "(?<![0-9A-Za-z<])[A-Z]{2}\\d{2}(?:[ ]?[A-Z0-9]){11,30}", baseConfidence: 0.7,
-    refine: (raw) => (ibanValid(raw.replace(/\s/g, "")) ? { confidence: 0.98 } : false) },
+    source: "(?<![0-9A-Za-z<])[A-Z][A-Z01]\\d{2}(?:[ ]?[A-Z0-9]){11,30}", baseConfidence: 0.7,
+    refine: (raw) => {
+      const s = raw.replace(/\s/g, "");
+      if (ibanValid(s)) return { confidence: 0.98 };
+      const fixed = s[0] + (s[1] === "0" ? "O" : s[1] === "1" ? "I" : s[1]!) + s.slice(2);
+      return fixed !== s && ibanValid(fixed) ? { confidence: 0.95 } : false;
+    } },
 
   // ── SWIFT/BIC ───────────────────────────────────────────────────────────────
   // A bank identifier is 8 or 11 chars: 4-letter bank, 2-letter country, 2 alnum
@@ -343,9 +363,11 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // false-positive prone. International, explicit "+": a country code then 8–15
   // digits once separators are stripped.
   { category: "phone", label: "Phone number", severity: "high",
-    source: "(?<![\\w+])\\+\\d(?:[ .\\-]?\\d){6,14}(?!\\w)", baseConfidence: 0.5,
+    // A monospace 0 can read as @ or O; up to two such slips are undone.
+    source: "(?<![\\w+])\\+\\d(?:[ .\\-]?[\\d@O]){6,14}(?!\\w)", baseConfidence: 0.5,
     refine: (raw) => {
-      const d = raw.replace(/\D/g, "");
+      if ((raw.match(/[@O]/g)?.length ?? 0) > 2) return false;
+      const d = raw.replace(/[@O]/g, "0").replace(/\D/g, "");
       return d.length >= 8 && d.length <= 15 ? { confidence: 0.9 } : false;
     } },
 

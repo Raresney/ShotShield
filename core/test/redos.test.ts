@@ -52,6 +52,10 @@ const adversarial: Record<string, string> = {
   "url at signs": "ab://u:" + "p@".repeat(N),
   "ip dots": "1.".repeat(N),
   "hex run": "0x" + "a".repeat(N),
+  // OCR-slip variants: spaced scheme, db URL without @, zero-as-@ phone.
+  "db url colons": "postgres: //u:" + "a:".repeat(N),
+  "phone slips": "+1" + " @".repeat(N),
+  "iban zero code": "R0" + "1".repeat(N),
 };
 
 for (const [name, input] of Object.entries(adversarial)) {
