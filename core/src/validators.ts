@@ -65,3 +65,52 @@ export function cnpValid(cnp: string): boolean {
   if (control === 10) control = 1;
   return control === cnp.charCodeAt(12) - 48;
 }
+
+const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+const BECH32_GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+
+/**
+ * Bech32 / bech32m checksum (BIP-173, BIP-350) — native SegWit and Taproot
+ * Bitcoin addresses. Mixed case is invalid by spec.
+ */
+export function bech32Valid(addr: string): boolean {
+  if (addr !== addr.toLowerCase() && addr !== addr.toUpperCase()) return false;
+  const s = addr.toLowerCase();
+  const sep = s.lastIndexOf("1");
+  if (sep < 1 || sep + 7 > s.length || s.length > 90) return false;
+  const values: number[] = [];
+  for (const c of s.slice(0, sep)) values.push(c.charCodeAt(0) >> 5);
+  values.push(0);
+  for (const c of s.slice(0, sep)) values.push(c.charCodeAt(0) & 31);
+  for (const c of s.slice(sep + 1)) {
+    const v = BECH32_CHARSET.indexOf(c);
+    if (v < 0) return false;
+    values.push(v);
+  }
+  let chk = 1;
+  for (const v of values) {
+    const top = chk >>> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for (let i = 0; i < 5; i++) if ((top >>> i) & 1) chk ^= BECH32_GEN[i]!;
+  }
+  return chk === 1 || chk === 0x2bc830a3;
+}
+
+/**
+ * A public, routable IPv4 address. Private, loopback, link-local, CGNAT,
+ * multicast and reserved ranges are rejected — they reveal nothing about who
+ * took the screenshot and would flood a dev screenshot with noise.
+ */
+export function publicIpv4(ip: string): boolean {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return false;
+  const o = parts.map((p) => (/^(0|[1-9]\d{0,2})$/.test(p) ? +p : -1));
+  if (o.some((n) => n < 0 || n > 255)) return false;
+  const [a, b] = o as [number, number, number, number];
+  if (a === 0 || a === 10 || a === 127 || a >= 224) return false;
+  if (a === 169 && b === 254) return false;
+  if (a === 172 && b >= 16 && b <= 31) return false;
+  if (a === 192 && b === 168) return false;
+  if (a === 100 && b >= 64 && b <= 127) return false;
+  return true;
+}
