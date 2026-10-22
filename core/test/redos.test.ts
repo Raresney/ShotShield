@@ -41,6 +41,17 @@ const adversarial: Record<string, string> = {
   "newline tokens": "12\n".repeat(N),
   // Mixed look-alike letters the CNP unconfuse passes walk over.
   "cnp lookalikes": "OISBZ ".repeat(N),
+  // The credential pass: a lookbehind on a secret name, tried at every offset.
+  "secret names": "password_secret_token.".repeat(N / 10),
+  "secret assignments": "pwd=pwd=".repeat(N / 4),
+  // Key-body continuation across spaces.
+  "key tail pieces": "sk-proj-" + "a1b2c3d4 ".repeat(N / 4),
+  "key tail no digit": "sk-proj-" + "abcdefghabcdefgh ".repeat(N / 8),
+  // URL credentials and IPs.
+  "url colons": "a://" + "b:".repeat(N),
+  "url at signs": "ab://u:" + "p@".repeat(N),
+  "ip dots": "1.".repeat(N),
+  "hex run": "0x" + "a".repeat(N),
 };
 
 for (const [name, input] of Object.entries(adversarial)) {

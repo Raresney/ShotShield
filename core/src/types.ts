@@ -3,6 +3,7 @@
 
 export type Category =
   | "api_key"
+  | "credential"
   | "jwt"
   | "credit_card"
   | "iban"
@@ -15,6 +16,8 @@ export type Category =
   | "name"
   | "email"
   | "phone"
+  | "crypto_wallet"
+  | "ip_address"
   | "face"
   | "custom";
 

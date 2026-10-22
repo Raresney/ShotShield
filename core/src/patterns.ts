@@ -2,7 +2,7 @@
 // validates a raw match. Adding a detector means adding a row here.
 
 import type { Category, Severity } from "./types.ts";
-import { luhn, ibanValid, cnpValid, cuiValid } from "./validators.ts";
+import { luhn, ibanValid, cnpValid, cuiValid, bech32Valid, publicIpv4 } from "./validators.ts";
 
 export interface PatternSpec {
   category: Category;
@@ -52,27 +52,110 @@ function cardBrand(d: string): string {
   return "Payment card";
 }
 
+// Prefix separators as OCR reads them: the printed `_` / `-`, or the space
+// Tesseract often turns it into.
+const U = "[_ ]";
+const D = "[-– ]";
+// Follow-on pieces of a key body that OCR split at a space. A piece must be
+// 8+ key chars and carry a digit early, so ordinary words after a key
+// ("…dc is the live key") never get glued on.
+const TAIL = "(?: (?=[A-Za-z_-]{0,40}\\d)[A-Za-z0-9_-]{8,})*";
+
+const PLACEHOLDERS = new Set([
+  "password", "passwd", "pass", "secret", "token", "apikey", "api_key", "changeme",
+  "null", "none", "nil", "true", "false", "undefined", "required", "optional",
+  "string", "example", "your_password", "yourpassword", "redacted", "hidden",
+]);
+
+// Is this value worth covering? Rejects masks, placeholders, template and env
+// references, and code — anything that isn't a literal secret.
+function looksLikeSecretValue(v: string): boolean {
+  if (v.length < 4) return false;
+  if (/^[*•●·x.\-_#]+$/i.test(v)) return false;
+  if (/^[$<{%[]|[()]/.test(v)) return false;
+  if (/^(?:process\.env|os\.environ|env\.|import\.meta)/i.test(v)) return false;
+  return !PLACEHOLDERS.has(v.toLowerCase());
+}
+
 export const BUILTIN_PATTERNS: PatternSpec[] = [
   // ── Secrets & API keys ──────────────────────────────────────────────────
-  // Known-prefix formats only: high precision, no entropy guessing. Catching
-  // keys we don't have a prefix for is a separate, noisier job for later.
+  // Known-prefix formats only: high precision, no entropy guessing. Keys with
+  // no prefix are caught by name instead (the credential pass below).
   // TODO: generic high-entropy secret pass behind an opt-in flag.
-  { category: "api_key", label: "GitHub token", severity: "critical",
-    source: "gh[pousr]_[A-Za-z0-9]{36}", baseConfidence: 0.99 },
+  //
+  // OCR reads these off pixels, and Tesseract often turns the `_` or `-` inside
+  // a prefix into a space ("sk_live 4eC3…"), so prefix separators accept a
+  // space too (`U` / `D` below). A long body can also break at a space; TAIL
+  // carries the match across follow-on pieces that still look like key
+  // material (8+ chars with a digit), so the second half isn't left exposed.
+  { category: "api_key", label: "Anthropic API key", severity: "critical",
+    source: `sk${D}ant${D}(?:api|admin|oat)\\d{2}${D}[A-Za-z0-9_-]{20,}${TAIL}`, baseConfidence: 0.99 },
   { category: "api_key", label: "OpenAI API key", severity: "critical",
-    source: "sk-(?:proj-)?[A-Za-z0-9_-]{20,}", baseConfidence: 0.9 },
+    source: `(?<![A-Za-z0-9])sk${D}(?!ant${D})(?:(?:proj|svcacct|admin)${D})?[A-Za-z0-9_-]{20,}${TAIL}`,
+    baseConfidence: 0.9 },
+  { category: "api_key", label: "GitHub token", severity: "critical",
+    source: `gh[pousr]${U}[A-Za-z0-9]{36}`, baseConfidence: 0.99 },
+  { category: "api_key", label: "GitHub token", severity: "critical",
+    source: `github${U}pat${U}[A-Za-z0-9]{22}${U}[A-Za-z0-9]{59}`, baseConfidence: 0.99 },
+  { category: "api_key", label: "GitLab token", severity: "critical",
+    source: `glpat${D}[A-Za-z0-9_-]{20,}`, baseConfidence: 0.98 },
+  { category: "api_key", label: "npm token", severity: "critical",
+    source: `npm${U}[A-Za-z0-9]{36}(?![A-Za-z0-9])`, baseConfidence: 0.97 },
+  { category: "api_key", label: "Hugging Face token", severity: "critical",
+    source: `hf${U}[A-Za-z0-9]{34}(?![A-Za-z0-9])`, baseConfidence: 0.95 },
   { category: "api_key", label: "AWS access key ID", severity: "critical",
-    source: "AKIA[0-9A-Z]{16}", baseConfidence: 0.97 },
+    source: "(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])", baseConfidence: 0.97 },
   { category: "api_key", label: "Google API key", severity: "critical",
     source: "AIza[0-9A-Za-z_-]{35}", baseConfidence: 0.95 },
+  { category: "api_key", label: "Google OAuth token", severity: "critical",
+    source: "ya29\\.[0-9A-Za-z_-]{20,}", baseConfidence: 0.95 },
   { category: "api_key", label: "Slack token", severity: "critical",
-    source: "xox[baprs]-[0-9A-Za-z-]{10,48}", baseConfidence: 0.95 },
+    source: `xox[baprse]${D}[0-9A-Za-z-]{10,48}`, baseConfidence: 0.95 },
+  { category: "api_key", label: "Slack webhook", severity: "critical",
+    source: "hooks\\.slack\\.com/services/T[A-Z0-9]{6,12}/B[A-Z0-9]{6,12}/[A-Za-z0-9]{20,32}", baseConfidence: 0.98 },
+  { category: "api_key", label: "Discord webhook", severity: "critical",
+    source: "discord(?:app)?\\.com/api/webhooks/\\d{17,20}/[A-Za-z0-9_-]{60,70}", baseConfidence: 0.98 },
+  { category: "api_key", label: "Telegram bot token", severity: "critical",
+    source: "(?<![0-9])\\d{8,10}:AA[0-9A-Za-z_-]{33}(?![0-9A-Za-z_-])", baseConfidence: 0.95 },
   { category: "api_key", label: "Stripe secret key", severity: "critical",
-    source: "(?:sk|rk)_live_[0-9A-Za-z]{16,}", baseConfidence: 0.97 },
+    source: `(?:sk|rk)${U}live${U}[0-9A-Za-z]{16,}${TAIL}`, baseConfidence: 0.97 },
+  { category: "api_key", label: "Stripe webhook secret", severity: "critical",
+    source: `whsec${U}[0-9A-Za-z]{24,}`, baseConfidence: 0.97 },
+  { category: "api_key", label: "Shopify token", severity: "critical",
+    source: `shp(?:at|ca|pa|ss)${U}[a-fA-F0-9]{32}`, baseConfidence: 0.97 },
+  { category: "api_key", label: "DigitalOcean token", severity: "critical",
+    source: `do[pro]${U}v1${U}[a-f0-9]{64}`, baseConfidence: 0.98 },
+  { category: "api_key", label: "Twilio API key", severity: "critical",
+    source: "(?<![A-Za-z0-9])SK[0-9a-f]{32}(?![A-Za-z0-9])", baseConfidence: 0.9 },
   { category: "api_key", label: "SendGrid API key", severity: "critical",
     source: "SG\\.[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]{43}", baseConfidence: 0.97 },
   { category: "api_key", label: "Private key block", severity: "critical",
-    source: "-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----", baseConfidence: 0.99 },
+    source: "-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----", baseConfidence: 0.99 },
+
+  // ── Credentials ───────────────────────────────────────────────────────────
+  // A secret behind a name that says what it is: `password = …`, `api_key: …`,
+  // `DB_PASSWORD=…`. The lookbehind keeps the name visible and covers only the
+  // value. Placeholders and code (`getPassword()`, `${PASS}`, `********`) are
+  // rejected, since redacting them protects nothing.
+  { category: "credential", label: "Password or secret", severity: "critical",
+    source: "(?<=\\b[\\w.-]{0,24}(?:password|passwd|passwort|parola|pwd|secret|api[_-]?key|apikey|access[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|private[_-]?key)[\\w.-]{0,24}[\"']?[ \\t]{0,3}[:=][ \\t]{0,3}[\"']?)[^\\s\"'`,;]{4,128}",
+    flags: "i", baseConfidence: 0.8,
+    refine: (raw) => (looksLikeSecretValue(raw) ? {} : false) },
+  // A bearer token that is a JWT or a known vendor key keeps the more specific
+  // label: JWTs are skipped here, and vendor keys outrank this on confidence.
+  { category: "credential", label: "Bearer token", severity: "critical",
+    source: "(?<=\\bBearer[ ]{1,3})(?!eyJ)[A-Za-z0-9._~+/-]{16,}={0,2}", baseConfidence: 0.85 },
+  { category: "credential", label: "Basic auth credentials", severity: "critical",
+    source: "(?<=\\bAuthorization:?[ ]{0,3}Basic[ ]{1,3})[A-Za-z0-9+/]{8,}={0,2}", flags: "i", baseConfidence: 0.92 },
+  // scheme://user:password@host — connection strings and URLs with the login
+  // baked in. The whole URL is covered: the host is half the leak.
+  { category: "credential", label: "Credentials in URL", severity: "critical",
+    source: "\\b[A-Za-z][A-Za-z0-9+.-]{1,15}://[^\\s:/@]{1,64}:[^\\s@/]{1,128}@[^\\s/?#]{1,253}",
+    baseConfidence: 0.9,
+    refine: (raw) => {
+      const pass = raw.slice(raw.indexOf("://") + 3).split("@")[0]!.split(":").slice(1).join(":");
+      return looksLikeSecretValue(pass) ? {} : false;
+    } },
 
   // ── JWT ─────────────────────────────────────────────────────────────────
   // header.payload.signature, each base64url. The leading eyJ ({" in base64)
@@ -271,4 +354,24 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   { category: "phone", label: "Phone number", severity: "high",
     source: "(?<![\\w+])0[237](?:[ .\\-]?\\d){8}(?!\\w)", baseConfidence: 0.6,
     refine: (raw) => (raw.replace(/\D/g, "").length === 10 ? { confidence: 0.9 } : false) },
+
+  // ── Crypto wallets ──────────────────────────────────────────────────────────
+  // An address is public by design, but next to a name or a face it ties a
+  // person to every transaction it ever made. Bitcoin's native SegWit/Taproot
+  // form carries a bech32 checksum, so random text can't pass for one.
+  { category: "crypto_wallet", label: "Bitcoin address", severity: "medium",
+    source: "(?<![A-Za-z0-9])(?:bc1|BC1)[a-zA-HJ-NP-Z0-9]{11,71}(?![A-Za-z0-9])", baseConfidence: 0.5,
+    refine: (raw) => (bech32Valid(raw) ? { confidence: 0.97 } : false) },
+  // Ethereum has no checksum in its lowercase form; the exact 0x + 40 hex shape,
+  // walled off from longer hex (a 64-char tx hash), carries the precision.
+  { category: "crypto_wallet", label: "Ethereum address", severity: "medium",
+    source: "(?<![A-Za-z0-9])0x[0-9a-fA-F]{40}(?![A-Za-z0-9])", baseConfidence: 0.85 },
+
+  // ── IP addresses ────────────────────────────────────────────────────────────
+  // Public addresses only — a home or server IP is a location and a target.
+  // Low severity: listed for review, not covered by default, since dev
+  // screenshots are full of harmless ones (8.8.8.8).
+  { category: "ip_address", label: "Public IP address", severity: "low",
+    source: "(?<![\\w.])(?:\\d{1,3}\\.){3}\\d{1,3}(?!\\w|\\.\\d)", baseConfidence: 0.5,
+    refine: (raw) => (publicIpv4(raw) ? { confidence: 0.85 } : false) },
 ];
