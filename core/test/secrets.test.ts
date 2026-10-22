@@ -58,6 +58,12 @@ test("a key body split by OCR is covered across the gap", () => {
   assert.equal(d.text, `${first} ${second}`);
 });
 
+test("a short tail OCR broke off is still covered", () => {
+  // Real Tesseract output for a Stripe key on a rendered line.
+  const d = only("key sk_live " + "4eC39HqLyjWDarjtT 1zdp7dc");
+  assert.equal(d.text, "sk_live " + "4eC39HqLyjWDarjtT 1zdp7dc");
+});
+
 test("a split tail never glues an ordinary word onto a key", () => {
   const key = "sk-" + "proj-" + body(24);
   assert.equal(only(`${key} production environment`).text, key);

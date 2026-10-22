@@ -57,9 +57,10 @@ function cardBrand(d: string): string {
 const U = "[_ ]";
 const D = "[-– ]";
 // Follow-on pieces of a key body that OCR split at a space. A piece must be
-// 8+ key chars and carry a digit early, so ordinary words after a key
-// ("…dc is the live key") never get glued on.
-const TAIL = "(?: (?=[A-Za-z_-]{0,40}\\d)[A-Za-z0-9_-]{8,})*";
+// 4+ key chars and carry a digit, so ordinary words after a key ("…dc is the
+// live key") never get glued on. `/` is in the class because OCR reads a 7 as
+// one. Seen live: "4eC39HqLyjWDarjtT 1zdp7dc" — a 7-char tail left exposed.
+const TAIL = "(?: (?=[A-Za-z_/-]{0,40}\\d)[A-Za-z0-9_/-]{4,})*";
 
 const PLACEHOLDERS = new Set([
   "password", "passwd", "pass", "secret", "token", "apikey", "api_key", "changeme",
