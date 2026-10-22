@@ -258,7 +258,9 @@ kbd {
 
 .canvas-wrap {
   position: absolute; inset: 20px 20px 76px;
-  display: grid; place-items: center;
+  /* Definite tracks, so the canvas's max-height: 100% resolves against the
+     wrap instead of an auto row that grows with the image. */
+  display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center;
   pointer-events: none;
 }
 .canvas {
