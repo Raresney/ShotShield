@@ -12,7 +12,10 @@ Find sensitive data in a screenshot and cover it before you share the image. Run
 ![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri-24C8DB?logo=tauri&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 
-<img src="docs/screenshot.png" alt="ShotShield scanning a screenshot, with detection categories on the left and a redacted sample in the workspace" width="900" />
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshot-light.png" />
+  <img src="docs/screenshot.png" alt="ShotShield with a scanned .env screenshot: keys, a database URL, an email, a phone number and an IBAN covered, the findings listed on the right" width="900" />
+</picture>
 
 </div>
 
@@ -22,7 +25,8 @@ You paste a screenshot into a chat or an issue, and only later notice it had an 
 
 The engine reads the text in an image with OCR, then runs it through a table of matchers. Most of them lean on a checksum or a printed label, so they stay quiet on random digits:
 
-- API keys and secrets: GitHub, OpenAI, AWS, Google, Slack, Stripe and SendGrid tokens, plus PEM private-key blocks
+- API keys and tokens: Anthropic, OpenAI, GitHub (classic and fine-grained), GitLab, npm, Hugging Face, AWS, Google (API keys and OAuth tokens), Stripe (secret keys and webhook secrets), Slack and Discord webhooks, Telegram bots, Shopify, DigitalOcean, Twilio, SendGrid, plus PEM private-key blocks
+- Passwords and secrets behind a name (`DB_PASSWORD=…`, `"client_secret": "…"`), `Authorization: Bearer|Basic` headers, and logins embedded in URLs (`postgres://user:pass@host`)
 - JSON Web Tokens
 - Payment cards, checked with Luhn and named by brand (Visa, Mastercard, Amex, Discover)
 - IBANs (mod-97) and SWIFT/BIC codes
@@ -31,26 +35,33 @@ The engine reads the text in an image with OCR, then runs it through a table of 
 - Romanian ID cards: the printed "SERIA … NR …" line and the machine-readable zone along the bottom
 - The holder's name, when it trails a Nume/Nom/Last name label
 - Emails, and phone numbers in international or Romanian form
+- Bitcoin (checksum-verified) and Ethereum wallet addresses
+- Public IP addresses — listed, but left visible unless you cover them
 - Faces, from a small detector that runs inside the app
 
-The OCR reads English and Romanian; both models are bundled, nothing is downloaded. Sideways photos get straightened automatically before the scan. And when an image reads like a Romanian ID but no CNP turned up, the scan takes a second look at a different scale — on a phone photo the number is usually there, just read badly the first time around.
+The OCR reads English and Romanian; both models are bundled, nothing is downloaded. The matchers expect OCR to slip — an underscore read as a space in the middle of a key, a monospace zero read as `@` or `O` — and still catch the value. Sideways photos get straightened automatically before the scan. And when an image reads like a Romanian ID but no CNP turned up, the scan takes a second look at a different scale — on a phone photo the number is usually there, just read badly the first time around.
 
-Every category has an on/off switch, a slider sets the minimum confidence a finding needs to show up, and you can add your own regex rules on top.
+Every category has an on/off switch in the Detection drawer, a slider sets the minimum confidence a finding needs to show up, and you can add your own regex rules on top.
 
 ## Using it
 
-Drop a screenshot onto the window, paste one from the clipboard, or pick a file. The scan runs — the progress bar names each stage as it goes — and anything sensitive is covered right away, with the findings listed worst first. Click a finding to uncover or re-cover it, drag a box on the image to hide something the scan missed, like a home address, and hold the Compare button whenever you want to peek at the original. Export writes the redacted copy, with the boxes baked into the pixels — or copy it straight to the clipboard and paste it into the chat you were about to send it to.
+Drop a screenshot anywhere on the window, paste one with `Ctrl+V`, or pick a file. The scan runs — a status pill over the image names each stage — and anything sensitive is covered right away, with the findings listed worst first. Click a finding to uncover or re-cover it, click a severity count to show only that severity, drag a box on the image to hide something the scan missed, like a home address, and hold the compare button to peek at the original.
+
+Covered areas are solid black by default; the Detection drawer switches them to a mosaic. The mosaic is generated rather than averaged from the pixels underneath, so unlike ordinary pixelation it can't be reversed by guessing the text. **Save image** opens the system Save As dialog and writes the redacted copy, boxes baked into the pixels; **Copy** puts it on the clipboard for the chat you were about to paste it into.
+
+Switch to **Text** mode for logs, `.env` files and messages: findings show up as you type, and **Copy redacted text** gives you the same text with every finding replaced by `[REDACTED]`.
 
 A few keys speed up the loop:
 
 - `Space` covers or uncovers every finding at once
 - `Ctrl+Z` and `Ctrl+Y` undo and redo a hand-drawn box
-- `Ctrl+S` exports the redacted image
+- `Ctrl+S` saves the redacted image, `Ctrl+O` opens one
 - `Delete` removes the last box you drew
+- `Esc` closes the Detection drawer
 
 ## Privacy
 
-The image stays on your computer. The OCR (tesseract.js) and the face model (face-api) are bundled into the app and run offline, so there's no account to create and nowhere for the picture to be sent. The build also ships a Content Security Policy that blocks outbound requests, which stops a stray dependency from phoning home.
+The image stays on your computer. The OCR (tesseract.js), the face model (face-api) and even the fonts are bundled into the app and run offline, so there's no account to create and nowhere for the picture to be sent. The build also ships a Content Security Policy that blocks outbound requests, which stops a stray dependency from phoning home. Saving goes through the system dialog, and the app can only write the one file you pick there.
 
 The export helps too, in a quieter way: the file you save is redrawn from the canvas, pixel by pixel, so camera metadata — EXIF tags, GPS coordinates, device model — never makes it into the copy you share. And because the redaction is painted into those pixels rather than layered on top, there's nothing underneath to recover.
 
