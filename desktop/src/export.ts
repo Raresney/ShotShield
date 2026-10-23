@@ -33,6 +33,40 @@ export async function saveCanvas(canvas: HTMLCanvasElement, filename: string): P
   return "saved";
 }
 
+/**
+ * Save several redacted images at once. Inside the app the user picks a folder
+ * (the dialog adds it to the fs scope, so writes stay inside it); names that
+ * collide get a numeric suffix. The browser build downloads each file.
+ */
+export async function saveAll(items: { canvas: HTMLCanvasElement; name: string }[]): Promise<SaveResult> {
+  const names = uniqueNames(items.map((i) => i.name));
+  if (!inTauri()) {
+    for (const [i, item] of items.entries()) download(await canvasBlob(item.canvas), names[i]!);
+    return "downloaded";
+  }
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const dir = await open({ directory: true, title: "Save redacted images to…" });
+  if (typeof dir !== "string") return "cancelled";
+  const { writeFile } = await import("@tauri-apps/plugin-fs");
+  const { join } = await import("@tauri-apps/api/path");
+  for (const [i, item] of items.entries()) {
+    const blob = await canvasBlob(item.canvas);
+    await writeFile(await join(dir, names[i]!), new Uint8Array(await blob.arrayBuffer()));
+  }
+  return "saved";
+}
+
+/** "a.png", "a.png" -> "a.png", "a-2.png". */
+export function uniqueNames(names: string[]): string[] {
+  const seen = new Map<string, number>();
+  return names.map((n) => {
+    const key = n.toLowerCase();
+    const count = (seen.get(key) ?? 0) + 1;
+    seen.set(key, count);
+    return count === 1 ? n : n.replace(/(\.[^.]+)?$/, `-${count}$1`);
+  });
+}
+
 function download(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
