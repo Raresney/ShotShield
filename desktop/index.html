@@ -24,6 +24,8 @@
       <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7" /></symbol>
       <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2.5" /><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5" /></symbol>
       <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5" /><path d="M4 17v1.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V17" /></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h3.6l2 2.2H18a2.5 2.5 0 0 1 2.5 2.5v7.8A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5Z" /></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></symbol>
       <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2.8 4.5 5.6v5.9c0 4.7 3.2 8.4 7.5 9.7 4.3-1.3 7.5-5 7.5-9.7V5.6Z" /><path d="m8.8 12 2.2 2.2 4.4-4.4" /></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></symbol>
@@ -118,8 +120,9 @@
                 </button>
               </div>
 
-              <input id="file" type="file" accept="image/*" hidden />
+              <input id="file" type="file" accept="image/*" multiple hidden />
             </div>
+            <div id="filmstrip" class="filmstrip" aria-label="Open images" hidden></div>
             <p id="drawHint" class="hint-line" hidden>
               Drag on the image to cover anything by hand
               <span class="hint-keys"><kbd>Space</kbd> cover all <kbd>Ctrl Z</kbd> undo <kbd>Ctrl S</kbd> save</span>
@@ -156,6 +159,9 @@
           <div id="results" class="results"></div>
 
           <div class="inspector-foot">
+            <button id="exportAll" class="btn btn-wide" type="button" title="Save every open image into a folder" hidden disabled>
+              <svg class="icon"><use href="#i-folder" /></svg><span>Save all</span>
+            </button>
             <button id="copyClipboard" class="btn" type="button" title="Copy the redacted image" disabled>
               <svg class="icon"><use href="#i-copy" /></svg><span>Copy</span>
             </button>
