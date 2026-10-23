@@ -7,7 +7,7 @@ import { ocr, ocrAutoOrient, ocrSecondLook, type Box, type OcrWord, type Progres
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
 import { locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, SEVERITY_RANK, type Region } from "./redact.ts";
-import { canvasBlob, redactedName, saveCanvas } from "./export.ts";
+import { canvasBlob, redactedName, saveAll, saveCanvas } from "./export.ts";
 import { loadSettings, renderSettings, scanConfig } from "./settings.ts";
 import { checkForUpdate, type PendingUpdate } from "./update.ts";
 
@@ -21,6 +21,9 @@ const clearBtn = $<HTMLButtonElement>("#clear");
 const exportBtn = $<HTMLButtonElement>("#export");
 const copyBtn = $<HTMLButtonElement>("#copyClipboard");
 const copyLabel = copyBtn.querySelector("span")!;
+const exportAllBtn = $<HTMLButtonElement>("#exportAll");
+const exportAllLabel = exportAllBtn.querySelector("span")!;
+const filmstrip = $<HTMLDivElement>("#filmstrip");
 const rotateBtn = $<HTMLButtonElement>("#rotate");
 const compareBtn = $<HTMLButtonElement>("#compare");
 const toggleAllBtn = $<HTMLButtonElement>("#toggleAll");
@@ -129,13 +132,14 @@ function setMode(m: Mode): void {
   exportBtn.hidden = m === "text";
   copyLabel.textContent = m === "text" ? "Copy redacted text" : "Copy";
   copyBtn.title = m === "text" ? "Copy the text with every finding replaced" : "Copy the redacted image";
-  copyBtn.disabled = m === "text" ? !input.value.trim() : !currentImg;
+  copyBtn.disabled = m === "text" ? !input.value.trim() : cur?.status !== "done";
+  exportAllBtn.hidden = m === "text" || docs.length < 2;
   workspaceMeta.hidden = m === "text";
   sevFilter = null;
   if (m === "text") {
     scanText();
     input.focus();
-  } else if (currentImg) {
+  } else if (cur?.status === "done") {
     renderRegions();
   } else {
     showEmpty();
@@ -149,7 +153,7 @@ modeText.addEventListener("click", () => setMode("text"));
 function showDashboard(severities: Severity[], protectedCount: number, exposedCount: number): void {
   const counts: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0 };
   for (const s of severities) counts[s]++;
-  findingsCount.textContent = String(severities.length + (mode === "image" ? manualBoxes.length : 0));
+  findingsCount.textContent = String(severities.length + (mode === "image" ? (cur?.manual.length ?? 0) : 0));
   for (const chip of sevChips) {
     const sev = chip.dataset.sev as Severity;
     sevCounts[sev].textContent = String(counts[sev]);
@@ -325,27 +329,48 @@ function onSettingsChange(): void {
 renderSettings(settingsBody, settings, onSettingsChange);
 
 // ── Image path ──
-// Bumped on every load/clear so a slow OCR pass can't render stale results.
-let gen = 0;
-let currentImg: HTMLImageElement | null = null;
-let sourceImg: HTMLImageElement | null = null; // the image as shown (post-rotation), for re-rotating
-let sourceName: string | null = null;
-let regions: Region[] = [];
-let manualBoxes: Box[] = []; // hand-drawn redaction rectangles, in image-pixel space
-// Undo/redo history for the manual boxes: each entry is a full snapshot of the
-// list. Both are reset when the image changes.
-let undoStack: Box[][] = [];
-let redoStack: Box[][] = [];
-// The OCR passes for the current image (one, or two when the second look ran),
-// cached so a settings change can re-derive findings without reading the image
-// again. Detected faces are cached the same way.
-let lastOcr: { text: string; words: OcrWord[] }[] = [];
-let lastFaces: Region[] = [];
+// Every image the user brings in is a Doc: its own pixels, OCR cache, findings,
+// hand-drawn boxes and undo history. Docs scan one after another in the
+// background (the OCR worker is single-file anyway), so the first one can be
+// reviewed while the rest are still being read.
+type DocStatus = "queued" | "scanning" | "done" | "failed";
+interface Doc {
+  id: number;
+  name: string;
+  /** The image on screen (post-rotation). */
+  shown: HTMLImageElement;
+  /** The settled image the boxes refer to; null until its scan finishes. */
+  img: HTMLImageElement | null;
+  /** OCR passes (one, or two when the second look ran), cached so a settings
+   * change re-derives findings without reading the image again. */
+  ocr: { text: string; words: OcrWord[] }[];
+  faces: Region[];
+  regions: Region[];
+  /** Hand-drawn redaction rectangles, in image-pixel space. */
+  manual: Box[];
+  /** Undo/redo snapshots of `manual`. */
+  undo: Box[][];
+  redo: Box[][];
+  status: DocStatus;
+  autoOrient: boolean;
+  /** Bumped when the doc is rotated or closed, so a stale scan drops its result. */
+  token: number;
+  progress: { fraction: number | null; label: string };
+  error?: string;
+  thumb: string;
+}
+
+let docs: Doc[] = [];
+let cur: Doc | null = null;
+let nextDocId = 1;
+
+const regionsNow = (): Region[] => cur?.regions ?? [];
+const manualNow = (): Box[] => cur?.manual ?? [];
+const settled = (): HTMLImageElement | null => (cur?.status === "done" ? cur.img : null);
 
 showEmpty();
 
 function displayImage(img: HTMLImageElement): void {
-  sourceImg = img;
   canvas.width = img.naturalWidth;
   canvas.height = img.naturalHeight;
   canvas.getContext("2d")!.drawImage(img, 0, 0);
@@ -358,56 +383,110 @@ function displayImage(img: HTMLImageElement): void {
   resetView();
 }
 
-async function scanImage(
-  img: HTMLImageElement,
-  token: number,
-  opts: { autoOrient: boolean },
-): Promise<void> {
-  results.replaceChildren();
-  exportBtn.disabled = true;
-  copyBtn.disabled = true;
-  showProgress(0, "Reading");
+// Phone photos can be 50MP+, which makes a huge canvas and a slow OCR pass; an
+// extreme panorama can even exceed the WebView canvas limit. Cap the longest side
+// so everything downstream (boxes, paint, export) works at a sane resolution.
+const MAX_WORKING_DIM = 4096;
+async function fitToWorkingSize(img: HTMLImageElement): Promise<HTMLImageElement> {
+  if (Math.max(img.naturalWidth, img.naturalHeight) <= MAX_WORKING_DIM) return img;
+  return loadImageEl(orientedCanvas(img, 0, MAX_WORKING_DIM).toDataURL("image/png"));
+}
+
+function thumbOf(src: CanvasImageSource & { width: number; height: number }): string {
+  const t = document.createElement("canvas");
+  const s = 112 / Math.max(src.width, src.height);
+  t.width = Math.max(1, Math.round(src.width * s));
+  t.height = Math.max(1, Math.round(src.height * s));
+  t.getContext("2d")!.drawImage(src, 0, 0, t.width, t.height);
+  return t.toDataURL("image/png");
+}
+
+// The image as it will be saved: the settled pixels with this doc's covers.
+function renderDoc(doc: Doc): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  const img = doc.img ?? doc.shown;
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  paint(c, img, doc.regions, doc.manual, settings.cover);
+  return c;
+}
+
+function refreshThumb(doc: Doc): void {
+  doc.thumb = thumbOf(doc === cur && doc.status === "done" ? canvas : renderDoc(doc));
+}
+
+// Build a doc's redaction list from its cached OCR and faces under the current
+// settings. Runs after a scan finishes and whenever a setting changes.
+function computeRegions(doc: Doc): void {
+  // Union the passes: the second look mostly re-reads what the first saw, so
+  // duplicate hits (same category, same spot) collapse and only what one pass
+  // caught alone — the missed CNP — comes through as a new region.
+  let textRegions: Region[] = [];
+  for (const pass of doc.ocr) {
+    if (!pass.text.trim()) continue;
+    textRegions = mergeRegions(textRegions, locate(scan(pass.text, scanConfig(settings)), pass.words));
+  }
+  doc.regions = [...textRegions, ...(settings.faces ? doc.faces : [])];
+}
+
+function setProgress(doc: Doc, fraction: number | null, label: string): void {
+  doc.progress = { fraction, label };
+  if (doc === cur) showProgress(fraction, label);
+}
+
+async function analyze(doc: Doc): Promise<void> {
+  const token = doc.token;
+  const alive = () => doc.token === token && docs.includes(doc);
+  doc.status = "scanning";
+  renderFilm();
+  if (doc === cur) {
+    results.replaceChildren();
+    updateExportState();
+  }
+  setProgress(doc, 0, "Reading text");
 
   // Both OCR passes report the same "reading" phase; this flag relabels the
   // second one so the status pill tells them apart.
   let secondPass = false;
   const onProgress: ProgressFn = (phase, fraction) => {
-    if (token !== gen) return;
-    if (phase === "orienting") showProgress(fraction, "Checking orientation");
-    else showProgress(fraction, secondPass ? "Taking a closer look" : "Reading text");
+    if (!alive()) return;
+    if (phase === "orienting") setProgress(doc, fraction, "Checking orientation");
+    else setProgress(doc, fraction, secondPass ? "Taking a closer look" : "Reading text");
   };
 
   let text = "";
   let words: OcrWord[] = [];
-  let working = img;
+  let working = doc.shown;
   try {
-    if (opts.autoOrient) {
-      const oriented = await ocrAutoOrient(img, onProgress);
-      if (token !== gen) return;
+    if (doc.autoOrient) {
+      const oriented = await ocrAutoOrient(doc.shown, onProgress);
+      if (!alive()) return;
       // The boxes come back in the upright frame, so show the image that way too.
       if (oriented.quarterTurns !== 0) {
-        working = await loadImageEl(orientedCanvas(img, oriented.quarterTurns).toDataURL("image/png"));
-        if (token !== gen) return;
-        displayImage(working);
+        working = await loadImageEl(orientedCanvas(doc.shown, oriented.quarterTurns).toDataURL("image/png"));
+        if (!alive()) return;
+        doc.shown = working;
+        if (doc === cur) displayImage(working);
       }
       text = oriented.text;
       words = oriented.words;
     } else {
-      const result = await ocr(img, onProgress);
-      if (token !== gen) return;
+      const result = await ocr(doc.shown, onProgress);
+      if (!alive()) return;
       text = result.text;
       words = result.words;
     }
   } catch (err) {
-    if (token !== gen) return;
-    hideProgress();
+    if (!alive()) return;
     console.error("OCR failed", err);
-    summary.textContent = `Couldn't read the image: ${err instanceof Error ? err.message : String(err)}`;
+    doc.status = "failed";
+    doc.error = `Couldn't read the image: ${err instanceof Error ? err.message : String(err)}`;
+    if (doc === cur) showDoc(doc);
+    renderFilm();
     return;
   }
 
-  currentImg = working;
-  lastOcr = [{ text, words }];
+  const passes = [{ text, words }];
 
   // Second look: when the image clearly reads as a Romanian ID but the CNP —
   // the field a marginal, scale-dependent read loses most often — came back
@@ -416,57 +495,255 @@ async function scanImage(
   const firstDets = scan(text, scanConfig(settings));
   if (needsSecondLook(firstDets, text, settings.enabled.national_id ?? true)) {
     secondPass = true;
-    showProgress(0, "Taking a closer look");
+    setProgress(doc, 0, "Taking a closer look");
     try {
       const second = await ocrSecondLook(working, onProgress);
-      if (token !== gen) return;
-      if (second.text.trim()) lastOcr.push(second);
+      if (!alive()) return;
+      if (second.text.trim()) passes.push(second);
     } catch (err) {
       console.error("Second OCR pass failed", err);
     }
-    if (token !== gen) return;
+    if (!alive()) return;
   }
 
   // Faces are best-effort and detected once per image, then cached: a model-load
   // failure must not drop the text findings, and toggling the Faces setting later
   // shouldn't re-run the detector.
-  showProgress(null, "Looking for faces");
-  lastFaces = [];
+  setProgress(doc, null, "Looking for faces");
+  let faces: Region[] = [];
   try {
     const { detectFaces } = await import("./faces.ts");
-    const hits = await detectFaces(working);
-    if (token !== gen) return;
-    lastFaces = hits.map(faceRegion);
+    faces = (await detectFaces(working)).map(faceRegion);
   } catch (err) {
     console.error("Face detection failed", err);
   }
-  if (token !== gen) return;
+  if (!alive()) return;
 
-  hideProgress();
-  recomputeRegions(true);
+  doc.img = working;
+  doc.ocr = passes;
+  doc.faces = faces;
+  computeRegions(doc);
+  doc.status = "done";
+  refreshThumb(doc);
+  if (doc === cur) showDoc(doc, true);
+  renderFilm();
+  updateExportState();
 }
 
-// Build the redaction list from the cached OCR and faces under the current
-// settings, then paint and render. Runs after a scan finishes and whenever a
-// setting changes, so toggling a category never triggers a fresh OCR pass.
-function recomputeRegions(fresh = false): void {
-  if (lastOcr.length === 0 || !currentImg) return;
-  // Union the passes: the second look mostly re-reads what the first saw, so
-  // duplicate hits (same category, same spot) collapse and only what one pass
-  // caught alone — the missed CNP — comes through as a new region.
-  let textRegions: Region[] = [];
-  for (const pass of lastOcr) {
-    if (!pass.text.trim()) continue;
-    textRegions = mergeRegions(textRegions, locate(scan(pass.text, scanConfig(settings)), pass.words));
+// Scan queued docs one at a time. The one on screen goes first.
+let pumping = false;
+async function pump(): Promise<void> {
+  if (pumping) return;
+  pumping = true;
+  try {
+    for (;;) {
+      const next = cur?.status === "queued" ? cur : docs.find((d) => d.status === "queued");
+      if (!next) break;
+      await analyze(next);
+    }
+  } finally {
+    pumping = false;
   }
-  const faceRegions = settings.faces ? lastFaces : [];
-  regions = [...textRegions, ...faceRegions];
-  repaint();
-  exportBtn.disabled = false;
-  if (mode === "image") {
-    copyBtn.disabled = false;
-    renderRegions(fresh);
+}
+
+// Put a doc on screen: its pixels, its findings, its progress.
+function showDoc(doc: Doc, fresh = false): void {
+  cur = doc;
+  hovered = null;
+  canvasHover = null;
+  sevFilter = null;
+  displayImage(doc.status === "done" && doc.img ? doc.img : doc.shown);
+  if (doc.status === "done") {
+    hideProgress();
+    repaint();
+    if (mode === "image") renderRegions(fresh);
+  } else {
+    if (doc.status === "failed") {
+      hideProgress();
+      showEmpty();
+      summary.textContent = doc.error ?? "Couldn't read the image.";
+    } else {
+      showProgress(doc.progress.fraction, doc.status === "queued" ? "Waiting in line" : doc.progress.label);
+      results.replaceChildren();
+    }
+    compareBtn.hidden = true;
+    toggleAllBtn.hidden = true;
+    undoBtn.disabled = true;
   }
+  updateExportState();
+  renderFilm();
+}
+
+function updateExportState(): void {
+  const ready = cur?.status === "done";
+  exportBtn.disabled = !ready;
+  if (mode === "image") copyBtn.disabled = !ready;
+  const done = docs.filter((d) => d.status === "done").length;
+  exportAllBtn.hidden = docs.length < 2;
+  exportAllLabel.textContent =
+    done === docs.length ? `Save all ${docs.length}` : `Save all · ${done}/${docs.length} ready`;
+  exportAllBtn.disabled = done !== docs.length;
+}
+
+async function addImages(files: File[]): Promise<void> {
+  const images = files.filter((f) => f.type.startsWith("image/"));
+  if (images.length === 0) return;
+  if (mode !== "image") setMode("image");
+  let first: Doc | null = null;
+  for (const file of images) {
+    let shown: HTMLImageElement;
+    try {
+      shown = await fitToWorkingSize(await loadImageEl(await readAsDataURL(file)));
+    } catch {
+      continue; // an unreadable file is skipped, the rest still load
+    }
+    const doc: Doc = {
+      id: nextDocId++,
+      name: file.name,
+      shown,
+      img: null,
+      ocr: [],
+      faces: [],
+      regions: [],
+      manual: [],
+      undo: [],
+      redo: [],
+      status: "queued",
+      autoOrient: true,
+      token: 0,
+      progress: { fraction: null, label: "Waiting in line" },
+      thumb: thumbOf(shown),
+    };
+    docs.push(doc);
+    first ??= doc;
+    // Show the first new image right away; later ones just join the strip.
+    if (doc === first) showDoc(doc);
+    else renderFilm();
+    void pump();
+  }
+  if (!first) summary.textContent = "Couldn't load the image.";
+}
+
+function readAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result as string));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(file);
+  });
+}
+
+function closeDoc(doc: Doc): void {
+  const i = docs.indexOf(doc);
+  if (i < 0) return;
+  doc.token++;
+  docs.splice(i, 1);
+  if (doc !== cur) {
+    renderFilm();
+    updateExportState();
+    return;
+  }
+  const next = docs[i] ?? docs[i - 1];
+  if (next) showDoc(next);
+  else clearStage();
+}
+
+function clearStage(): void {
+  cur = null;
+  canvas.hidden = true;
+  drawbox.hidden = true;
+  stagePrompt.hidden = false;
+  stageActions.hidden = true;
+  compareBtn.hidden = true;
+  toggleAllBtn.hidden = true;
+  drawHint.hidden = true;
+  workspaceMeta.textContent = "";
+  hideProgress();
+  hovered = null;
+  canvasHover = null;
+  sevFilter = null;
+  resetView();
+  stage.classList.remove("has-image");
+  updateExportState();
+  renderFilm();
+  showEmpty();
+}
+
+function step(delta: number): void {
+  if (!cur || docs.length < 2) return;
+  const i = docs.indexOf(cur);
+  const next = docs[(i + delta + docs.length) % docs.length];
+  if (next && next !== cur) {
+    if (cur.status === "done") refreshThumb(cur);
+    showDoc(next);
+  }
+}
+
+// The strip of open images under the stage; only shown with two or more.
+function renderFilm(): void {
+  filmstrip.hidden = docs.length < 2;
+  if (filmstrip.hidden) return;
+  filmstrip.replaceChildren(
+    ...docs.map((doc, i) => {
+      const tile = document.createElement("div");
+      tile.className = "film";
+      tile.dataset.status = doc.status;
+      if (doc === cur) tile.classList.add("active");
+
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "film-open";
+      open.title = doc.name;
+      open.setAttribute("aria-label", `Show ${doc.name}`);
+      open.setAttribute("aria-current", String(doc === cur));
+      const img = document.createElement("img");
+      img.src = doc.thumb;
+      img.alt = "";
+      const badge = document.createElement("span");
+      badge.className = "film-badge";
+      if (doc.status === "done") {
+        const exposed = doc.regions.filter((r) => !r.hidden).length;
+        badge.textContent = exposed > 0 ? `${exposed} exposed` : `${doc.regions.length + doc.manual.length} covered`;
+        badge.classList.toggle("warn", exposed > 0);
+      } else if (doc.status === "failed") {
+        badge.textContent = "Failed";
+        badge.classList.add("warn");
+      } else {
+        badge.classList.add("busy");
+        badge.textContent = doc.status === "scanning" ? "Scanning" : "Queued";
+      }
+      open.append(img, badge);
+      open.addEventListener("click", () => {
+        if (doc === cur) return;
+        if (cur?.status === "done") refreshThumb(cur);
+        showDoc(doc);
+      });
+
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "film-close";
+      close.title = "Close";
+      close.setAttribute("aria-label", `Close ${doc.name}`);
+      close.append(svgIcon("i-x"));
+      close.addEventListener("click", () => closeDoc(doc));
+
+      tile.style.setProperty("--i", String(i));
+      tile.append(open, close);
+      return tile;
+    }),
+    addTile(),
+  );
+}
+
+function addTile(): HTMLElement {
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "film-add";
+  add.title = "Add images";
+  add.setAttribute("aria-label", "Add images");
+  add.append(svgIcon("i-plus"));
+  add.addEventListener("click", () => fileInput.click());
+  return add;
 }
 
 // Wrap a detected face as a redaction region, so it lists, toggles, paints and
@@ -489,23 +766,46 @@ function faceRegion(hit: FaceHit): Region {
   };
 }
 
+// Recompute every scanned doc after a settings change; repaint the one on screen.
+function recomputeRegions(): void {
+  for (const doc of docs) if (doc.status === "done") computeRegions(doc);
+  if (cur?.status === "done") {
+    repaint();
+    if (mode === "image") renderRegions();
+  }
+  scheduleThumbs();
+}
+
+// Cover-style and toggle changes alter every thumbnail; batch the redraws.
+let thumbTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleThumbs(): void {
+  clearTimeout(thumbTimer);
+  thumbTimer = setTimeout(() => {
+    for (const doc of docs) if (doc.status === "done") refreshThumb(doc);
+    renderFilm();
+  }, 300);
+}
+
 // `fresh` marks a brand-new scan: only then do rows play their stagger-in
 // animation. Re-renders (toggling a region, changing a setting, undo) keep the
 // list still — replaying the entrance on every click reads as flicker.
 function renderRegions(fresh = false): void {
-  undoBtn.disabled = undoStack.length === 0;
+  const regions = regionsNow();
+  const manualBoxes = manualNow();
+  undoBtn.disabled = !cur || cur.undo.length === 0;
   const hiddenCount = regions.filter((r) => r.hidden).length;
   const exposedCount = regions.length - hiddenCount;
   compareBtn.hidden = !(hiddenCount > 0 || manualBoxes.length > 0);
   toggleAllBtn.hidden = regions.length === 0;
   toggleAllBtn.replaceChildren(svgIcon(exposedCount > 0 ? "i-eye-off" : "i-eye"));
   toggleAllBtn.title = exposedCount > 0 ? "Cover all (Space)" : "Uncover all (Space)";
+  if (docs.length > 1) scheduleThumbs();
 
   if (regions.length === 0 && manualBoxes.length === 0) {
     showEmpty();
-    summary.textContent = currentImg ? "Nothing sensitive found" : "";
+    summary.textContent = settled() ? "Nothing sensitive found" : "";
     const empty = results.querySelector(".empty");
-    if (currentImg && empty) {
+    if (settled() && empty) {
       empty.querySelector("strong")!.textContent = "Nothing sensitive found";
       empty.querySelector("span")!.textContent = "Drag on the image to cover anything by hand.";
     }
@@ -567,8 +867,8 @@ function regionRow(region: Region, index: number, position: number): HTMLElement
 }
 
 function toggle(index: number): void {
-  const region = regions[index];
-  if (!region || !currentImg) return;
+  const region = regionsNow()[index];
+  if (!region || !settled()) return;
   region.hidden = !region.hidden;
   repaint();
   renderRegions();
@@ -580,22 +880,23 @@ function toggle(index: number): void {
 // the canvas being scaled to fit, and painted onto the canvas itself so the
 // saved PNG carries them.
 function pushManualHistory(): void {
-  undoStack.push(manualBoxes.map((b) => ({ ...b })));
-  redoStack = [];
+  if (!cur) return;
+  cur.undo.push(cur.manual.map((b) => ({ ...b })));
+  cur.redo = [];
 }
 function undoManual(): void {
-  const prev = undoStack.pop();
-  if (!prev) return;
-  redoStack.push(manualBoxes.map((b) => ({ ...b })));
-  manualBoxes = prev;
+  const prev = cur?.undo.pop();
+  if (!cur || !prev) return;
+  cur.redo.push(cur.manual.map((b) => ({ ...b })));
+  cur.manual = prev;
   repaint();
   renderRegions();
 }
 function redoManual(): void {
-  const next = redoStack.pop();
-  if (!next) return;
-  undoStack.push(manualBoxes.map((b) => ({ ...b })));
-  manualBoxes = next;
+  const next = cur?.redo.pop();
+  if (!cur || !next) return;
+  cur.undo.push(cur.manual.map((b) => ({ ...b })));
+  cur.manual = next;
   repaint();
   renderRegions();
 }
@@ -604,7 +905,8 @@ undoBtn.addEventListener("click", undoManual);
 // Cover or uncover every detected region at once (Space). While anything is
 // still visible, hide it all; once everything's hidden, the next press reveals it.
 function toggleAllRegions(): void {
-  if (!currentImg || regions.length === 0) return;
+  const regions = regionsNow();
+  if (!settled() || regions.length === 0) return;
   const anyVisible = regions.some((r) => !r.hidden);
   for (const r of regions) r.hidden = anyVisible;
   repaint();
@@ -613,8 +915,9 @@ function toggleAllRegions(): void {
 toggleAllBtn.addEventListener("click", toggleAllRegions);
 
 function repaint(): void {
-  if (!currentImg) return;
-  paint(canvas, currentImg, regions, manualBoxes, settings.cover);
+  const img = settled();
+  if (!img || !cur) return;
+  paint(canvas, img, cur.regions, cur.manual, settings.cover);
   if (hovered) {
     const ctx = canvas.getContext("2d")!;
     ctx.save();
@@ -636,7 +939,8 @@ function setHover(boxes: Box[] | null): void {
 // canvas's drag-to-redact gesture.
 compareBtn.addEventListener("pointerdown", (e) => {
   e.preventDefault();
-  if (currentImg) canvas.getContext("2d")!.drawImage(currentImg, 0, 0);
+  const img = settled();
+  if (img) canvas.getContext("2d")!.drawImage(img, 0, 0);
 });
 for (const ev of ["pointerup", "pointerleave", "pointercancel"]) {
   compareBtn.addEventListener(ev, () => repaint());
@@ -655,7 +959,7 @@ function manualRow(box: Box, index: number, position: number): HTMLElement {
   el.classList.add("hit-manual");
   el.addEventListener("click", () => {
     pushManualHistory();
-    manualBoxes.splice(index, 1);
+    manualNow().splice(index, 1);
     setHover(null);
     renderRegions();
   });
@@ -753,7 +1057,7 @@ let pan: { cx: number; cy: number; tx: number; ty: number } | null = null;
 let canvasHover: number | null = null;
 
 canvas.addEventListener("pointerdown", (e) => {
-  if (!currentImg) return; // wait until this image's OCR pass has settled
+  if (!settled()) return; // wait until this image's scan has settled
   e.preventDefault();
   canvas.setPointerCapture(e.pointerId);
   if (e.button === 1) {
@@ -774,13 +1078,13 @@ canvas.addEventListener("pointermove", (e) => {
     return;
   }
   if (!drag) {
-    if (!currentImg) return;
+    if (!settled()) return;
     const p = toImageXY(e.clientX, e.clientY);
-    const hit = regionAt(regions, p.x, p.y);
+    const hit = regionAt(regionsNow(), p.x, p.y);
     if (hit !== canvasHover) {
       canvasHover = hit;
       canvas.classList.toggle("over-region", hit !== null);
-      setHover(hit === null ? null : regions[hit]!.boxes);
+      setHover(hit === null ? null : regionsNow()[hit]!.boxes);
     }
     return;
   }
@@ -810,13 +1114,13 @@ canvas.addEventListener("pointerup", (e) => {
     stage.classList.remove("panning");
     return;
   }
-  if (!drag) return;
+  if (!drag || !cur) return;
   drawbox.hidden = true;
   const start = drag;
   drag = null;
   // Barely moved: a click, not a drag — toggle the finding under it.
   if (Math.hypot(e.clientX - start.cx, e.clientY - start.cy) < 4) {
-    const hit = regionAt(regions, start.x, start.y);
+    const hit = regionAt(regionsNow(), start.x, start.y);
     if (hit !== null) toggle(hit);
     return;
   }
@@ -829,7 +1133,7 @@ canvas.addEventListener("pointerup", (e) => {
   // zero-size canvas rect) fails the test instead of slipping through.
   if (!(w >= 6 && h >= 6)) return;
   pushManualHistory();
-  manualBoxes.push({ x, y, w, h });
+  cur.manual.push({ x, y, w, h });
   repaint();
   renderRegions();
 });
@@ -840,78 +1144,6 @@ canvas.addEventListener("pointercancel", () => {
   stage.classList.remove("panning");
   drawbox.hidden = true;
 });
-
-// Phone photos can be 50MP+, which makes a huge canvas and a slow OCR pass; an
-// extreme panorama can even exceed the WebView canvas limit. Cap the longest side
-// so everything downstream (boxes, paint, export) works at a sane resolution.
-const MAX_WORKING_DIM = 4096;
-async function fitToWorkingSize(img: HTMLImageElement): Promise<HTMLImageElement> {
-  if (Math.max(img.naturalWidth, img.naturalHeight) <= MAX_WORKING_DIM) return img;
-  return loadImageEl(orientedCanvas(img, 0, MAX_WORKING_DIM).toDataURL("image/png"));
-}
-
-function loadImage(src: string, opts: { autoOrient: boolean }, token: number): void {
-  loadImageEl(src)
-    .then((img) => (token === gen ? fitToWorkingSize(img) : null))
-    .then((img) => {
-      if (!img || token !== gen) return;
-      // A fresh image starts with no manual boxes and no settled OCR image, so
-      // drawing stays disabled until this load's OCR pass finishes.
-      currentImg = null;
-      regions = [];
-      manualBoxes = [];
-      undoStack = [];
-      redoStack = [];
-      sevFilter = null;
-      displayImage(img);
-      void scanImage(img, token, opts);
-    })
-    .catch(() => {
-      if (token === gen) summary.textContent = "Couldn't load the image.";
-    });
-}
-
-function handleFile(file: File | null | undefined): void {
-  if (!file || !file.type.startsWith("image/")) return;
-  if (mode !== "image") setMode("image");
-  const token = ++gen;
-  sourceName = file.name;
-  const reader = new FileReader();
-  reader.addEventListener("load", () =>
-    loadImage(reader.result as string, { autoOrient: true }, token),
-  );
-  reader.readAsDataURL(file);
-}
-
-function clearImage(): void {
-  gen++;
-  currentImg = null;
-  sourceImg = null;
-  sourceName = null;
-  regions = [];
-  manualBoxes = [];
-  undoStack = [];
-  redoStack = [];
-  lastOcr = [];
-  lastFaces = [];
-  sevFilter = null;
-  canvas.hidden = true;
-  drawbox.hidden = true;
-  stagePrompt.hidden = false;
-  stageActions.hidden = true;
-  compareBtn.hidden = true;
-  toggleAllBtn.hidden = true;
-  exportBtn.disabled = true;
-  copyBtn.disabled = true;
-  drawHint.hidden = true;
-  workspaceMeta.textContent = "";
-  hideProgress();
-  hovered = null;
-  canvasHover = null;
-  resetView();
-  stage.classList.remove("has-image");
-  showEmpty();
-}
 
 const canPick = () => !stage.classList.contains("has-image");
 
@@ -932,7 +1164,7 @@ pasteBtn.addEventListener("click", async (e) => {
       const type = item.types.find((t) => t.startsWith("image/"));
       if (type) {
         const blob = await item.getType(type);
-        handleFile(new File([blob], "clipboard", { type }));
+        void addImages([new File([blob], "clipboard", { type })]);
         return;
       }
     }
@@ -943,17 +1175,17 @@ pasteBtn.addEventListener("click", async (e) => {
   }
 });
 fileInput.addEventListener("change", () => {
-  handleFile(fileInput.files?.[0]);
+  void addImages([...(fileInput.files ?? [])]);
   // Clear the value so choosing the same file again (e.g. after Clear) still
   // fires `change` — otherwise the picker sees no change and nothing loads.
   fileInput.value = "";
 });
-clearBtn.addEventListener("click", clearImage);
+clearBtn.addEventListener("click", () => cur && closeDoc(cur));
 
 async function exportImage(): Promise<void> {
-  if (exportBtn.disabled) return;
+  if (exportBtn.disabled || !cur) return;
   try {
-    const result = await saveCanvas(canvas, redactedName(sourceName));
+    const result = await saveCanvas(renderDoc(cur), redactedName(cur.name));
     if (result !== "cancelled") flash(exportBtn, "Saved");
   } catch (err) {
     console.error("Save failed", err);
@@ -961,6 +1193,17 @@ async function exportImage(): Promise<void> {
   }
 }
 exportBtn.addEventListener("click", () => void exportImage());
+
+exportAllBtn.addEventListener("click", async () => {
+  if (exportAllBtn.disabled) return;
+  try {
+    const result = await saveAll(docs.map((d) => ({ canvas: renderDoc(d), name: redactedName(d.name) })));
+    if (result !== "cancelled") flash(exportAllBtn, `Saved ${docs.length}`);
+  } catch (err) {
+    console.error("Save all failed", err);
+    flash(exportAllBtn, "Save failed");
+  }
+});
 
 // Briefly swap a button's label to confirm an action, then restore it. Only the
 // label span changes, so the button's icon survives.
@@ -972,6 +1215,7 @@ function flash(btn: HTMLButtonElement, msg: string): void {
   setTimeout(() => {
     label.textContent = original;
     btn.disabled = false;
+    if (btn === exportAllBtn || btn === exportBtn) updateExportState();
   }, 1300);
 }
 
@@ -987,8 +1231,9 @@ copyBtn.addEventListener("click", async () => {
     }
     return;
   }
+  if (!cur) return;
   try {
-    const blob = await canvasBlob(canvas);
+    const blob = await canvasBlob(renderDoc(cur));
     await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
     flash(copyBtn, "Copied");
   } catch (err) {
@@ -996,11 +1241,27 @@ copyBtn.addEventListener("click", async () => {
     flash(copyBtn, "Failed");
   }
 });
-rotateBtn.addEventListener("click", () => {
-  if (!sourceImg) return;
+rotateBtn.addEventListener("click", async () => {
+  if (!cur) return;
+  const doc = cur;
   // Manual rotate is a deliberate 90° nudge — don't re-run the auto search.
-  const token = ++gen;
-  loadImage(orientedCanvas(sourceImg, 1).toDataURL("image/png"), { autoOrient: false }, token);
+  const rotated = await loadImageEl(orientedCanvas(doc.shown, 1).toDataURL("image/png"));
+  doc.token++;
+  Object.assign(doc, {
+    shown: rotated,
+    img: null,
+    ocr: [],
+    faces: [],
+    regions: [],
+    manual: [],
+    undo: [],
+    redo: [],
+    status: "queued" as DocStatus,
+    autoOrient: false,
+    thumb: thumbOf(rotated),
+  });
+  showDoc(doc);
+  void pump();
 });
 
 // Drag and drop anywhere in the window lands on the stage.
@@ -1019,19 +1280,21 @@ window.addEventListener("drop", (e) => {
   e.preventDefault();
   dragDepth = 0;
   stage.classList.remove("dragover");
-  handleFile(e.dataTransfer?.files?.[0]);
+  void addImages([...(e.dataTransfer?.files ?? [])]);
 });
 
 // Paste an image from the clipboard. Pasting text falls through untouched.
 window.addEventListener("paste", (e) => {
   const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith("image/"));
-  if (item) handleFile(item.getAsFile());
+  const file = item?.getAsFile();
+  if (file) void addImages([file]);
 });
 
 // ── Keyboard shortcuts ──
 // Space toggles every region, Ctrl/Cmd+Z and Ctrl+Shift+Z / Ctrl+Y undo and redo
 // the manual boxes, Ctrl/Cmd+S saves, Ctrl+O opens, Delete drops the last box,
-// Escape closes the drawer. Suppressed while typing in the text box.
+// ←/→ step through open images, Escape closes the drawer. Suppressed while
+// typing in the text box.
 function inEditable(t: EventTarget | null): boolean {
   return t instanceof HTMLTextAreaElement || t instanceof HTMLInputElement;
 }
@@ -1057,6 +1320,10 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (mode !== "image") setMode("image");
     fileInput.click();
+  } else if (!mod && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    if (mode !== "image" || docs.length < 2) return;
+    e.preventDefault();
+    step(e.key === "ArrowLeft" ? -1 : 1);
   } else if (!mod && ["+", "=", "-", "0"].includes(e.key)) {
     if (!stage.classList.contains("has-image") || mode !== "image") return;
     e.preventDefault();
@@ -1064,14 +1331,14 @@ window.addEventListener("keydown", (e) => {
     else zoomCentre(e.key === "-" ? 1 / 1.25 : 1.25);
   } else if (e.key === " " && !mod && !(e.target instanceof HTMLButtonElement)) {
     // Don't steal Space from a focused button (a finding row toggles itself).
-    if (!currentImg || regions.length === 0) return;
+    if (!settled() || regionsNow().length === 0) return;
     e.preventDefault();
     toggleAllRegions();
   } else if ((e.key === "Delete" || e.key === "Backspace") && !mod) {
-    if (!manualBoxes.length) return;
+    if (!cur || !cur.manual.length) return;
     e.preventDefault();
     pushManualHistory();
-    manualBoxes.pop();
+    cur.manual.pop();
     repaint();
     renderRegions();
   }
