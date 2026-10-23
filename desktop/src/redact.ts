@@ -67,6 +67,30 @@ export function needsSecondLook(dets: Detection[], text: string, cnpEnabled: boo
   );
 }
 
+/** The padding paint() puts around a detected box, so hit-testing matches what's drawn. */
+export const coverPad = (b: Box): number => Math.max(2, b.h * 0.15);
+
+/**
+ * Which region sits under an image-space point, if any. When boxes overlap the
+ * smallest wins — it's the one the pointer is most clearly aiming at.
+ */
+export function regionAt(regions: Region[], x: number, y: number): number | null {
+  let hit: number | null = null;
+  let hitArea = Infinity;
+  regions.forEach((r, i) => {
+    for (const b of r.boxes) {
+      const pad = coverPad(b);
+      if (x < b.x - pad || x > b.x + b.w + pad || y < b.y - pad || y > b.y + b.h + pad) continue;
+      const area = b.w * b.h;
+      if (area < hitArea) {
+        hit = i;
+        hitArea = area;
+      }
+    }
+  });
+  return hit;
+}
+
 /**
  * The pasted text with every detection replaced by a marker, ready to share.
  * Detections never overlap (the scanner resolves that), so a right-to-left
@@ -102,7 +126,7 @@ export function paint(
     if (!region.hidden) continue;
     for (const b of region.boxes) {
       // Pad a hair so descenders and antialiased edges are fully covered.
-      const pad = Math.max(2, b.h * 0.15);
+      const pad = coverPad(b);
       rects.push({ x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 });
     }
   }

@@ -272,6 +272,12 @@ kbd {
   animation: fade-in 220ms var(--ease) both;
 }
 
+.canvas { transform-origin: 0 0; }
+.canvas.over-region { cursor: pointer; }
+.stage.panning .canvas { cursor: grabbing; }
+.stage.zoomed .canvas { box-shadow: none; border-radius: 0; }
+.stage.magnified .canvas { image-rendering: pixelated; }
+
 .draw-box {
   position: absolute; z-index: 4; pointer-events: none;
   border: 1.5px dashed var(--accent);
@@ -326,6 +332,10 @@ kbd {
 .tool:disabled { opacity: 0.35; cursor: default; }
 .tool-danger:hover:not(:disabled) { color: var(--critical); background: color-mix(in srgb, var(--critical) 12%, transparent); }
 .tool .icon { width: 17px; height: 17px; }
+.tool-text {
+  width: auto; min-width: 52px; padding: 0 8px;
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
 .toolbar-sep { width: 1px; height: 20px; margin: 0 4px; background: var(--border-strong); }
 
 .hint-line {

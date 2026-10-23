@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { locate, mergeRegions, needsSecondLook, redactText, SEVERITY_RANK, type Region } from "../src/redact.ts";
+import { locate, mergeRegions, needsSecondLook, redactText, regionAt, SEVERITY_RANK, type Region } from "../src/redact.ts";
 import type { Detection } from "@shotshield/core";
 import type { OcrWord } from "../src/ocr.ts";
 
@@ -125,5 +125,23 @@ describe("redactText", () => {
 
   it("is a no-op with nothing detected", () => {
     expect(redactText("clean", [])).toBe("clean");
+  });
+});
+
+describe("regionAt", () => {
+  const regs = [region("email", 100, 100, 200, 20), region("face", 80, 80, 300, 300)];
+
+  it("finds the region under a point, padding included", () => {
+    expect(regionAt(regs, 150, 110)).toBe(0);
+    expect(regionAt(regs, 150, 98)).toBe(0); // inside the 3px cover padding
+  });
+
+  it("prefers the smallest box when regions overlap", () => {
+    expect(regionAt(regs, 150, 110)).toBe(0);
+    expect(regionAt(regs, 350, 300)).toBe(1);
+  });
+
+  it("returns null off every box", () => {
+    expect(regionAt(regs, 10, 10)).toBeNull();
   });
 });

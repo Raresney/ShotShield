@@ -45,7 +45,7 @@ Every category has an on/off switch in the Detection drawer, a slider sets the m
 
 ## Using it
 
-Drop a screenshot anywhere on the window, paste one with `Ctrl+V`, or pick a file. The scan runs — a status pill over the image names each stage — and anything sensitive is covered right away, with the findings listed worst first. Click a finding to uncover or re-cover it, click a severity count to show only that severity, drag a box on the image to hide something the scan missed, like a home address, and hold the compare button to peek at the original.
+Drop a screenshot anywhere on the window, paste one with `Ctrl+V`, or pick a file. The scan runs — a status pill over the image names each stage — and anything sensitive is covered right away, with the findings listed worst first. Click a finding — in the list or right on the image — to uncover or re-cover it, click a severity count to show only that severity, drag a box on the image to hide something the scan missed, like a home address, and hold the compare button to peek at the original.
 
 Covered areas are solid black by default; the Detection drawer switches them to a mosaic. The mosaic is generated rather than averaged from the pixels underneath, so unlike ordinary pixelation it can't be reversed by guessing the text. **Save image** opens the system Save As dialog and writes the redacted copy, boxes baked into the pixels; **Copy** puts it on the clipboard for the chat you were about to paste it into.
 
@@ -58,6 +58,7 @@ A few keys speed up the loop:
 - `Ctrl+S` saves the redacted image, `Ctrl+O` opens one
 - `Delete` removes the last box you drew
 - `Esc` closes the Detection drawer
+- `Ctrl`+wheel or `+` / `-` zooms toward the cursor, the wheel or a middle-drag pans, `0` fits the image again
 
 ## Privacy
 
