@@ -33,7 +33,7 @@ The engine reads the text in an image with OCR, then runs it through a table of 
 - CVV codes, when they sit right next to their label
 - Romanian CNP and CUI/CIF, each confirmed by its control digit
 - Romanian ID cards: the printed "SERIA … NR …" line and the machine-readable zone along the bottom
-- The holder's name, when it trails a Nume/Nom/Last name label
+- People's names behind a label: the ID card's Nume/Nom/Last name, or a form's `Name:`, `Cardholder:`, `Titular cont:`, `Beneficiar:` and the like
 - Emails, and phone numbers in international or Romanian form
 - Bitcoin (checksum-verified) and Ethereum wallet addresses
 - Public IP addresses — listed, but left visible unless you cover them
