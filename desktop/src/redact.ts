@@ -67,6 +67,53 @@ export function needsSecondLook(dets: Detection[], text: string, cnpEnabled: boo
   );
 }
 
+/** What a pointer on a hand-drawn box would do: move it, or drag an edge/corner. */
+export type BoxGrip = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+/**
+ * Which hand-drawn box (and which part of it) sits under an image-space point.
+ * `tol` is the grab margin around edges, in image pixels. The last-drawn box is
+ * on top, so it wins.
+ */
+export function boxGripAt(boxes: Box[], x: number, y: number, tol: number): { index: number; grip: BoxGrip } | null {
+  for (let i = boxes.length - 1; i >= 0; i--) {
+    const b = boxes[i]!;
+    if (x < b.x - tol || x > b.x + b.w + tol || y < b.y - tol || y > b.y + b.h + tol) continue;
+    const n = Math.abs(y - b.y) <= tol;
+    const s = Math.abs(y - (b.y + b.h)) <= tol;
+    const w = Math.abs(x - b.x) <= tol;
+    const e = Math.abs(x - (b.x + b.w)) <= tol;
+    const grip = `${n ? "n" : s ? "s" : ""}${w ? "w" : e ? "e" : ""}` as BoxGrip | "";
+    return { index: i, grip: grip || "move" };
+  }
+  return null;
+}
+
+/**
+ * The box after dragging `grip` by (dx, dy), clamped to the image and never
+ * smaller than `min` on a side. Dragging an edge past the opposite one stops
+ * at the minimum rather than flipping the box.
+ */
+export function dragBox(b: Box, grip: BoxGrip, dx: number, dy: number, bounds: { w: number; h: number }, min = 6): Box {
+  if (grip === "move") {
+    return {
+      x: Math.max(0, Math.min(bounds.w - b.w, b.x + dx)),
+      y: Math.max(0, Math.min(bounds.h - b.h, b.y + dy)),
+      w: b.w,
+      h: b.h,
+    };
+  }
+  let left = b.x;
+  let top = b.y;
+  let right = b.x + b.w;
+  let bottom = b.y + b.h;
+  if (grip.includes("w")) left = Math.max(0, Math.min(right - min, left + dx));
+  if (grip.includes("e")) right = Math.min(bounds.w, Math.max(left + min, right + dx));
+  if (grip.includes("n")) top = Math.max(0, Math.min(bottom - min, top + dy));
+  if (grip.includes("s")) bottom = Math.min(bounds.h, Math.max(top + min, bottom + dy));
+  return { x: left, y: top, w: right - left, h: bottom - top };
+}
+
 /** The padding paint() puts around a detected box, so hit-testing matches what's drawn. */
 export const coverPad = (b: Box): number => Math.max(2, b.h * 0.15);
 
