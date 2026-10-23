@@ -78,6 +78,23 @@ function looksLikeSecretValue(v: string): boolean {
   return !PLACEHOLDERS.has(v.toLowerCase());
 }
 
+// A label matched in any case without the "i" flag, which would also make the
+// value after it case-insensitive: "name" -> "[Nn][Aa][Mm][Ee]".
+const anyCase = (label: string): string =>
+  label.replace(/\p{L}/gu, (c) => `[${c.toUpperCase()}${c.toLowerCase()}]`).replace(/ /g, "\\s+");
+
+const FORM_NAME_LABELS = [
+  "full name", "name", "nume și prenume", "nume si prenume", "numele", "nume",
+  "cardholder", "card holder", "account holder", "titular", "titular cont",
+  "beneficiar", "beneficiary", "payee", "recipient", "destinatar", "client", "customer",
+].map(anyCase).join("|");
+
+// A capitalised word's first letter, or the l OCR reads a capital I as.
+const CAP = "(?:\\p{Lu}|l(?=\\p{Ll}))";
+
+// Placeholder values a form shows before anyone types.
+const NAME_PLACEHOLDERS = /^(?:John|Jane) Doe$|\b(?:Your|Full|First|Last|Enter|Name|Required|Optional|Example)\b/;
+
 export const BUILTIN_PATTERNS: PatternSpec[] = [
   // ── Secrets & API keys ──────────────────────────────────────────────────
   // Known-prefix formats only: high precision, no entropy guessing. Keys with
@@ -337,14 +354,29 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // The holder's name behind a buletin's trilingual Nume/Nom/Last-name labels.
   // The lookbehind matches the label but keeps it out of the hit, so only the
   // uppercase value (1–3 words) is boxed. Best-effort: it leans on OCR keeping
-  // the label next to its value. A name with no recognised label needs NER, not
-  // a regex, so it's out of scope.
+  // the label next to its value. A name with no label at all needs NER, not a
+  // regex, so it's out of scope.
   { category: "name", label: "Name", severity: "high",
     source:
       "(?<=\\b(?:NUME|Nume|PRENUME|Prenume|NOM|Nom|PR[EÉ]NOM|Pr[eé]nom|LAST NAME|Last name|FIRST NAME|First name|SURNAME|Surname)\\b[\\s:/]{0,3})[A-ZĂÂÎȘȚŞŢ]{2,}(?:[ -][A-ZĂÂÎȘȚŞŢ]{2,}){0,2}",
     baseConfidence: 0.6,
+    // A value made only of label words is the rest of a header ("NUME ȘI
+    // PRENUME"), not a name.
     refine: (raw) =>
-      /^(?:NUME|PRENUME|NOM|PR[EÉ]NOM|SURNAME|LAST|FIRST|NAME)$/.test(raw) ? false : { confidence: 0.6 } },
+      raw.split(/[ -]/).every((w) => /^(?:NUME|PRENUME|NOM|PR[EÉ]NOM|SURNAME|LAST|FIRST|NAME|[ȘŞS]I|ET|AND)$/.test(w))
+        ? false
+        : { confidence: 0.6 } },
+
+  // A person's name behind a form or receipt label — "Name: Ana Popescu",
+  // "Cardholder: Ion Ionescu", "Titular cont: Maria Pop". The colon is required
+  // and so are two or three capitalised words (given + family name), which
+  // keeps headings ("Name: Server") and single words out. OCR often reads a
+  // capital I as l ("Ion Ionescu" -> "lon lonescu"), so a word may open with
+  // an l before a lowercase letter.
+  { category: "name", label: "Name", severity: "high",
+    source: `(?<=\\b(?:${FORM_NAME_LABELS})[ \\t]{0,2}:[ \\t]{0,3})${CAP}\\p{Ll}+(?:[ -]${CAP}\\p{Ll}+){1,2}(?![\\p{L}\\d])`,
+    flags: "u", baseConfidence: 0.7,
+    refine: (raw) => (NAME_PLACEHOLDERS.test(raw) ? false : {}) },
 
   // ── Email ─────────────────────────────────────────────────────────────────
   // Every quantifier is bounded to a real-world maximum (local-part ≤64, label

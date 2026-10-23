@@ -344,6 +344,24 @@ test("does not fire on a label without an uppercase value", () => {
   assert.deepEqual(scan("the last name field is required"), []);
 });
 
+test("redacts a name behind a form or receipt label", () => {
+  const d = scan("Name: Ana Popescu");
+  assert.equal(d.length, 1);
+  assert.equal(d[0]!.category, "name");
+  assert.equal(d[0]!.text, "Ana Popescu");
+  assert.equal(scan("Cardholder: Ion Ionescu-Vlad")[0]?.text, "Ion Ionescu-Vlad");
+  assert.equal(scan("Titular cont: Maria Pop")[0]?.text, "Maria Pop");
+  // Tesseract's read of "Ion Ionescu": a capital I comes back as l.
+  assert.equal(scan("Cardholder: lon lonescu")[0]?.text, "lon lonescu");
+  assert.equal(scan("NUME ȘI PRENUME: Ștefan Țurcanu")[0]?.text, "Ștefan Țurcanu");
+});
+
+test("leaves headings, single words and placeholders alone", () => {
+  for (const t of ["Name: Server", "Name: production", "name: ana popescu", "Name: John Doe", "Full name: Your Name", "Customer: Acme"]) {
+    assert.deepEqual(scan(t).filter((d) => d.category === "name"), [], t);
+  }
+});
+
 test("does not redact a bare column-header label as a name", () => {
   assert.deepEqual(scan("NUME PRENUME"), []);
 });

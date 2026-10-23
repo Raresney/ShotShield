@@ -56,6 +56,9 @@ const adversarial: Record<string, string> = {
   "db url colons": "postgres: //u:" + "a:".repeat(N),
   "phone slips": "+1" + " @".repeat(N),
   "iban zero code": "R0" + "1".repeat(N),
+  // Form-label names: a label wall, and capitalised words that never end.
+  "name labels": "Name: ".repeat(N / 4),
+  "name words": "Name: " + "Ab-".repeat(N),
 };
 
 for (const [name, input] of Object.entries(adversarial)) {
