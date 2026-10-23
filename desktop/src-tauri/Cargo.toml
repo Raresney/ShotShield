@@ -30,3 +30,8 @@ tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 
+[target."cfg(windows)".dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+tauri-plugin-global-shortcut = "2"
+xcap = { version = "0.9", default-features = false }
+

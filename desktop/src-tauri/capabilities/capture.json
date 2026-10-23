@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "capture",
+  "description": "The screen-capture overlay: show itself once painted, nothing else",
+  "windows": ["capture"],
+  "platforms": ["windows"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-set-focus"
+  ]
+}

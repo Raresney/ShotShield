@@ -1,0 +1,45 @@
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0; width: 100%; height: 100%; overflow: hidden;
+  background: #000;
+  cursor: crosshair;
+  user-select: none;
+  font: 13px/1.4 "Inter Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+#frame { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+
+.shade { position: fixed; inset: 0; background: rgba(5, 8, 12, 0.42); }
+.shade.hidden { display: none; }
+
+/* The selection punches a clear hole: everything around it is shaded by the
+   huge box-shadow, so the frozen pixels inside stay untouched. */
+.selection {
+  position: fixed;
+  outline: 1.5px solid #2dd4bf;
+  box-shadow: 0 0 0 100vmax rgba(5, 8, 12, 0.42);
+}
+
+.size {
+  position: absolute; left: 0; top: -28px;
+  padding: 3px 8px; border-radius: 6px;
+  font-weight: 600; font-variant-numeric: tabular-nums;
+  color: #042f2a; background: #2dd4bf;
+  white-space: nowrap;
+}
+
+.hint {
+  position: fixed; top: 24px; left: 50%; translate: -50% 0;
+  padding: 9px 16px; border-radius: 999px;
+  color: #e9ebf0; background: rgba(20, 23, 29, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+  font-weight: 550;
+}
+.hint kbd {
+  padding: 1px 6px; border-radius: 5px;
+  font: 11px "Cascadia Mono", Consolas, monospace;
+  background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.18);
+}
