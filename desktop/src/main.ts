@@ -6,7 +6,7 @@ import { scan, type Detection, type Severity } from "@shotshield/core";
 import { ocr, ocrAutoOrient, ocrSecondLook, type Box, type OcrWord, type ProgressFn } from "./ocr.ts";
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
-import { locate, mergeRegions, needsSecondLook, paint, redactText, SEVERITY_RANK, type Region } from "./redact.ts";
+import { locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, SEVERITY_RANK, type Region } from "./redact.ts";
 import { canvasBlob, redactedName, saveCanvas } from "./export.ts";
 import { loadSettings, renderSettings, scanConfig } from "./settings.ts";
 import { checkForUpdate, type PendingUpdate } from "./update.ts";
@@ -25,6 +25,7 @@ const rotateBtn = $<HTMLButtonElement>("#rotate");
 const compareBtn = $<HTMLButtonElement>("#compare");
 const toggleAllBtn = $<HTMLButtonElement>("#toggleAll");
 const undoBtn = $<HTMLButtonElement>("#undo");
+const zoomReset = $<HTMLButtonElement>("#zoomReset");
 const input = $<HTMLTextAreaElement>("#input");
 const summary = $<HTMLParagraphElement>("#summary");
 const results = $<HTMLDivElement>("#results");
@@ -354,6 +355,7 @@ function displayImage(img: HTMLImageElement): void {
   drawHint.hidden = false;
   stage.classList.add("has-image");
   workspaceMeta.textContent = `${img.naturalWidth} × ${img.naturalHeight}`;
+  resetView();
 }
 
 async function scanImage(
@@ -665,6 +667,7 @@ function manualRow(box: Box, index: number, position: number): HTMLElement {
 }
 
 // Map a pointer's client coordinates to image pixels, clamped to the canvas.
+// getBoundingClientRect includes the zoom transform, so this holds at any zoom.
 function toImageXY(clientX: number, clientY: number): { x: number; y: number } {
   const r = canvas.getBoundingClientRect();
   const x = ((clientX - r.left) / r.width) * canvas.width;
@@ -675,18 +678,112 @@ function toImageXY(clientX: number, clientY: number): { x: number; y: number } {
   };
 }
 
+// ── Zoom & pan ──
+// A CSS transform on the canvas (origin top-left): the image keeps its fitted
+// layout box, and the transform scales and shifts it on top. Ctrl+wheel and
+// +/-/0 zoom toward the cursor or centre; the wheel and a middle-drag pan.
+const view = { z: 1, tx: 0, ty: 0 };
+const MAX_ZOOM = 8;
+
+function applyView(): void {
+  if (view.z <= 1) Object.assign(view, { z: 1, tx: 0, ty: 0 });
+  canvas.style.transform =
+    view.z === 1 ? "" : `translate(${view.tx}px, ${view.ty}px) scale(${view.z})`;
+  stage.classList.toggle("zoomed", view.z > 1);
+  // Show the real pixel scale (100% = one image pixel per screen pixel).
+  const shown = canvas.getBoundingClientRect().width * devicePixelRatio;
+  const scale = canvas.width ? shown / canvas.width : 1;
+  zoomReset.textContent = `${Math.round(scale * 100)}%`;
+  // Past 150% show crisp pixels, so a box can be drawn exactly on a glyph edge.
+  stage.classList.toggle("magnified", scale > 1.5);
+}
+
+function zoomAt(clientX: number, clientY: number, factor: number): void {
+  const next = Math.max(1, Math.min(MAX_ZOOM, view.z * factor));
+  if (next === view.z) return;
+  // Keep the image point under the cursor fixed. With origin 0 0 the canvas's
+  // untransformed left edge is rect.left - tx.
+  const r = canvas.getBoundingClientRect();
+  const left = r.left - view.tx;
+  const top = r.top - view.ty;
+  const qx = (clientX - left - view.tx) / view.z;
+  const qy = (clientY - top - view.ty) / view.z;
+  view.z = next;
+  view.tx = clientX - left - next * qx;
+  view.ty = clientY - top - next * qy;
+  applyView();
+}
+
+function zoomCentre(factor: number): void {
+  const s = stage.getBoundingClientRect();
+  zoomAt(s.left + s.width / 2, s.top + s.height / 2, factor);
+}
+
+function resetView(): void {
+  Object.assign(view, { z: 1, tx: 0, ty: 0 });
+  applyView();
+}
+
+stage.addEventListener(
+  "wheel",
+  (e) => {
+    if (!stage.classList.contains("has-image")) return;
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0015));
+    } else if (view.z > 1) {
+      e.preventDefault();
+      view.tx -= e.shiftKey ? e.deltaY : e.deltaX;
+      view.ty -= e.shiftKey ? 0 : e.deltaY;
+      applyView();
+    }
+  },
+  { passive: false },
+);
+zoomReset.addEventListener("click", resetView);
+new ResizeObserver(() => {
+  if (stage.classList.contains("has-image")) applyView();
+}).observe(stage);
+
+// ── Pointer on the image ──
+// A drag draws a manual box; a click on a finding toggles it; a middle-drag
+// pans. Hovering a finding outlines it, same as hovering its card.
 let drag: { x: number; y: number; cx: number; cy: number } | null = null;
+let pan: { cx: number; cy: number; tx: number; ty: number } | null = null;
+let canvasHover: number | null = null;
 
 canvas.addEventListener("pointerdown", (e) => {
   if (!currentImg) return; // wait until this image's OCR pass has settled
   e.preventDefault();
+  canvas.setPointerCapture(e.pointerId);
+  if (e.button === 1) {
+    pan = { cx: e.clientX, cy: e.clientY, tx: view.tx, ty: view.ty };
+    stage.classList.add("panning");
+    return;
+  }
+  if (e.button !== 0) return;
   const p = toImageXY(e.clientX, e.clientY);
   drag = { x: p.x, y: p.y, cx: e.clientX, cy: e.clientY };
-  canvas.setPointerCapture(e.pointerId);
 });
 
 canvas.addEventListener("pointermove", (e) => {
-  if (!drag) return;
+  if (pan) {
+    view.tx = pan.tx + (e.clientX - pan.cx);
+    view.ty = pan.ty + (e.clientY - pan.cy);
+    applyView();
+    return;
+  }
+  if (!drag) {
+    if (!currentImg) return;
+    const p = toImageXY(e.clientX, e.clientY);
+    const hit = regionAt(regions, p.x, p.y);
+    if (hit !== canvasHover) {
+      canvasHover = hit;
+      canvas.classList.toggle("over-region", hit !== null);
+      setHover(hit === null ? null : regions[hit]!.boxes);
+    }
+    return;
+  }
   // The live preview rectangle is drawn in the stage's own coordinate space,
   // clamped to the image so it never spills past the edge.
   const s = stage.getBoundingClientRect();
@@ -700,15 +797,34 @@ canvas.addEventListener("pointermove", (e) => {
   drawbox.hidden = false;
 });
 
+canvas.addEventListener("pointerleave", () => {
+  if (canvasHover === null) return;
+  canvasHover = null;
+  canvas.classList.remove("over-region");
+  setHover(null);
+});
+
 canvas.addEventListener("pointerup", (e) => {
+  if (pan) {
+    pan = null;
+    stage.classList.remove("panning");
+    return;
+  }
   if (!drag) return;
   drawbox.hidden = true;
-  const end = toImageXY(e.clientX, e.clientY);
-  const x = Math.min(drag.x, end.x);
-  const y = Math.min(drag.y, end.y);
-  const w = Math.abs(end.x - drag.x);
-  const h = Math.abs(end.y - drag.y);
+  const start = drag;
   drag = null;
+  // Barely moved: a click, not a drag — toggle the finding under it.
+  if (Math.hypot(e.clientX - start.cx, e.clientY - start.cy) < 4) {
+    const hit = regionAt(regions, start.x, start.y);
+    if (hit !== null) toggle(hit);
+    return;
+  }
+  const end = toImageXY(e.clientX, e.clientY);
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const w = Math.abs(end.x - start.x);
+  const h = Math.abs(end.y - start.y);
   // Require a real, big-enough rectangle. Written as `>=` so a NaN (e.g. a
   // zero-size canvas rect) fails the test instead of slipping through.
   if (!(w >= 6 && h >= 6)) return;
@@ -720,6 +836,8 @@ canvas.addEventListener("pointerup", (e) => {
 
 canvas.addEventListener("pointercancel", () => {
   drag = null;
+  pan = null;
+  stage.classList.remove("panning");
   drawbox.hidden = true;
 });
 
@@ -789,6 +907,8 @@ function clearImage(): void {
   workspaceMeta.textContent = "";
   hideProgress();
   hovered = null;
+  canvasHover = null;
+  resetView();
   stage.classList.remove("has-image");
   showEmpty();
 }
@@ -937,6 +1057,11 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (mode !== "image") setMode("image");
     fileInput.click();
+  } else if (!mod && ["+", "=", "-", "0"].includes(e.key)) {
+    if (!stage.classList.contains("has-image") || mode !== "image") return;
+    e.preventDefault();
+    if (e.key === "0") resetView();
+    else zoomCentre(e.key === "-" ? 1 / 1.25 : 1.25);
   } else if (e.key === " " && !mod && !(e.target instanceof HTMLButtonElement)) {
     // Don't steal Space from a focused button (a finding row toggles itself).
     if (!currentImg || regions.length === 0) return;
