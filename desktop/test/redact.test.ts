@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { locate, mergeRegions, needsSecondLook, redactText, regionAt, SEVERITY_RANK, type Region } from "../src/redact.ts";
+import { locate, mergeRegions, needsSecondLook, boxGripAt, dragBox, redactText, regionAt, SEVERITY_RANK, type Region } from "../src/redact.ts";
 import type { Detection } from "@shotshield/core";
 import type { OcrWord } from "../src/ocr.ts";
 
@@ -143,5 +143,41 @@ describe("regionAt", () => {
 
   it("returns null off every box", () => {
     expect(regionAt(regs, 10, 10)).toBeNull();
+  });
+});
+
+describe("boxGripAt", () => {
+  const boxes = [{ x: 100, y: 100, w: 200, h: 100 }];
+
+  it("moves from the inside, resizes from edges and corners", () => {
+    expect(boxGripAt(boxes, 200, 150, 5)).toEqual({ index: 0, grip: "move" });
+    expect(boxGripAt(boxes, 200, 102, 5)?.grip).toBe("n");
+    expect(boxGripAt(boxes, 298, 150, 5)?.grip).toBe("e");
+    expect(boxGripAt(boxes, 101, 199, 5)?.grip).toBe("sw");
+  });
+
+  it("returns null away from every box, and prefers the last-drawn one", () => {
+    expect(boxGripAt(boxes, 10, 10, 5)).toBeNull();
+    const stacked = [...boxes, { x: 150, y: 120, w: 50, h: 50 }];
+    expect(boxGripAt(stacked, 170, 140, 5)?.index).toBe(1);
+  });
+});
+
+describe("dragBox", () => {
+  const b = { x: 100, y: 100, w: 200, h: 100 };
+  const bounds = { w: 1000, h: 500 };
+
+  it("moves without resizing, clamped to the image", () => {
+    expect(dragBox(b, "move", 50, -20, bounds)).toEqual({ x: 150, y: 80, w: 200, h: 100 });
+    expect(dragBox(b, "move", 5000, 5000, bounds)).toEqual({ x: 800, y: 400, w: 200, h: 100 });
+  });
+
+  it("resizes from the dragged edge or corner only", () => {
+    expect(dragBox(b, "e", 30, 999, bounds)).toEqual({ x: 100, y: 100, w: 230, h: 100 });
+    expect(dragBox(b, "nw", -10, -10, bounds)).toEqual({ x: 90, y: 90, w: 210, h: 110 });
+  });
+
+  it("stops at the minimum instead of flipping", () => {
+    expect(dragBox(b, "w", 500, 0, bounds)).toEqual({ x: 294, y: 100, w: 6, h: 100 });
   });
 });

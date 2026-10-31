@@ -6,7 +6,7 @@ import { scan, type Detection, type Severity } from "@shotshield/core";
 import { ocr, ocrAutoOrient, ocrSecondLook, type Box, type OcrWord, type ProgressFn } from "./ocr.ts";
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
-import { locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, SEVERITY_RANK, type Region } from "./redact.ts";
+import { locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, boxGripAt, dragBox, SEVERITY_RANK, type BoxGrip, type Region } from "./redact.ts";
 import { canvasBlob, redactedName, saveAll, saveCanvas } from "./export.ts";
 import { loadSettings, renderSettings, scanConfig } from "./settings.ts";
 import { checkForUpdate, type PendingUpdate } from "./update.ts";
@@ -1050,11 +1050,26 @@ new ResizeObserver(() => {
 }).observe(stage);
 
 // ── Pointer on the image ──
-// A drag draws a manual box; a click on a finding toggles it; a middle-drag
-// pans. Hovering a finding outlines it, same as hovering its card.
+// A drag draws a manual box; dragging an existing hand-drawn box moves it, and
+// its edges and corners resize it; a click on a finding toggles it; a
+// middle-drag pans. Hovering a finding outlines it, same as hovering its card.
 let drag: { x: number; y: number; cx: number; cy: number } | null = null;
 let pan: { cx: number; cy: number; tx: number; ty: number } | null = null;
+let adjust: { index: number; grip: BoxGrip; x: number; y: number; orig: Box; changed: boolean } | null = null;
 let canvasHover: number | null = null;
+
+const GRIP_CURSOR: Record<BoxGrip, string> = {
+  move: "move", n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize",
+  ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize",
+};
+
+// Edges are easy to grab at any zoom: 7 screen pixels, in image pixels.
+function gripAt(clientX: number, clientY: number) {
+  if (!cur) return null;
+  const p = toImageXY(clientX, clientY);
+  const tol = (7 * canvas.width) / canvas.getBoundingClientRect().width;
+  return boxGripAt(cur.manual, p.x, p.y, tol);
+}
 
 canvas.addEventListener("pointerdown", (e) => {
   if (!settled()) return; // wait until this image's scan has settled
@@ -1067,6 +1082,11 @@ canvas.addEventListener("pointerdown", (e) => {
   }
   if (e.button !== 0) return;
   const p = toImageXY(e.clientX, e.clientY);
+  const grip = gripAt(e.clientX, e.clientY);
+  if (grip && cur) {
+    adjust = { ...grip, x: p.x, y: p.y, orig: { ...cur.manual[grip.index]! }, changed: false };
+    return;
+  }
   drag = { x: p.x, y: p.y, cx: e.clientX, cy: e.clientY };
 });
 
@@ -1077,8 +1097,34 @@ canvas.addEventListener("pointermove", (e) => {
     applyView();
     return;
   }
+  if (adjust && cur) {
+    const p = toImageXY(e.clientX, e.clientY);
+    if (!adjust.changed) {
+      // One undo step per drag, taken before the first change.
+      cur.undo.push(cur.manual.map((b) => ({ ...b })));
+      cur.redo = [];
+      adjust.changed = true;
+    }
+    cur.manual[adjust.index] = dragBox(adjust.orig, adjust.grip, p.x - adjust.x, p.y - adjust.y, {
+      w: canvas.width,
+      h: canvas.height,
+    });
+    hovered = [cur.manual[adjust.index]!];
+    repaint();
+    return;
+  }
   if (!drag) {
     if (!settled()) return;
+    const grip = gripAt(e.clientX, e.clientY);
+    canvas.style.cursor = grip ? GRIP_CURSOR[grip.grip] : "";
+    if (grip) {
+      if (canvasHover !== -1 - grip.index) {
+        canvasHover = -1 - grip.index; // negative: a hand-drawn box
+        canvas.classList.remove("over-region");
+        setHover([cur!.manual[grip.index]!]);
+      }
+      return;
+    }
     const p = toImageXY(e.clientX, e.clientY);
     const hit = regionAt(regionsNow(), p.x, p.y);
     if (hit !== canvasHover) {
@@ -1102,6 +1148,8 @@ canvas.addEventListener("pointermove", (e) => {
 });
 
 canvas.addEventListener("pointerleave", () => {
+  if (adjust) return;
+  canvas.style.cursor = "";
   if (canvasHover === null) return;
   canvasHover = null;
   canvas.classList.remove("over-region");
@@ -1112,6 +1160,12 @@ canvas.addEventListener("pointerup", (e) => {
   if (pan) {
     pan = null;
     stage.classList.remove("panning");
+    return;
+  }
+  if (adjust) {
+    const moved = adjust.changed;
+    adjust = null;
+    if (moved) renderRegions();
     return;
   }
   if (!drag || !cur) return;
@@ -1141,6 +1195,12 @@ canvas.addEventListener("pointerup", (e) => {
 canvas.addEventListener("pointercancel", () => {
   drag = null;
   pan = null;
+  if (adjust?.changed && cur) {
+    cur.manual[adjust.index] = adjust.orig;
+    cur.undo.pop();
+    repaint();
+  }
+  adjust = null;
   stage.classList.remove("panning");
   drawbox.hidden = true;
 });
