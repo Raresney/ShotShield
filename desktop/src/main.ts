@@ -1404,6 +1404,45 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+// ── Screen capture (Windows) ──
+// Ctrl+Alt+R (registered system-wide by the app) or the Capture button: the
+// app hides, an overlay over the frozen screen takes a region, and the crop
+// lands here as a new image.
+const canCapture = "__TAURI_INTERNALS__" in window && navigator.userAgent.includes("Windows");
+if (canCapture) {
+  const captureBtn = $<HTMLButtonElement>("#captureBtn");
+  const captureBtnDrop = $<HTMLButtonElement>("#captureBtnDrop");
+  captureBtn.hidden = false;
+  captureBtnDrop.hidden = false;
+  $<HTMLElement>("#captureHint").hidden = false;
+  void (async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const { listen } = await import("@tauri-apps/api/event");
+    const begin = (e: Event) => {
+      e.stopPropagation();
+      invoke("capture_start").catch((err) => {
+        console.error("Capture failed", err);
+        flash(captureBtnDrop, "Capture failed");
+      });
+    };
+    captureBtn.addEventListener("click", begin);
+    captureBtnDrop.addEventListener("click", begin);
+    await listen("capture-ready", async () => {
+      try {
+        const bytes = await invoke<ArrayBuffer>("capture_take");
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+        await addImages([new File([bytes], `capture-${stamp}.png`, { type: "image/png" })]);
+      } catch (err) {
+        console.error("Couldn't receive the capture", err);
+      }
+    });
+    await listen<string>("capture-failed", (e) => {
+      console.error("Capture failed", e.payload);
+      if (!cur) summary.textContent = `Couldn't capture the screen: ${e.payload}`;
+    });
+  })();
+}
+
 // ── Updates ──
 function showUpdateBanner(update: PendingUpdate): void {
   updateBanner.replaceChildren();

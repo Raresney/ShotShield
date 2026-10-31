@@ -26,6 +26,7 @@
       <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5" /><path d="M4 17v1.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V17" /></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
       <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h3.6l2 2.2H18a2.5 2.5 0 0 1 2.5 2.5v7.8A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5Z" /></symbol>
+      <symbol id="i-capture" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" /><circle cx="12" cy="12" r="3" /></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></symbol>
       <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2.8 4.5 5.6v5.9c0 4.7 3.2 8.4 7.5 9.7 4.3-1.3 7.5-5 7.5-9.7V5.6Z" /><path d="m8.8 12 2.2 2.2 4.4-4.4" /></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></symbol>
@@ -54,6 +55,9 @@
           <span class="badge badge-local" title="OCR and detection run on this computer. Nothing is uploaded.">
             <svg class="icon"><use href="#i-lock" /></svg>On-device
           </span>
+          <button id="captureBtn" class="icon-btn" type="button" title="Capture a screen region (Ctrl+Alt+R)" aria-label="Capture a screen region" hidden>
+            <svg class="icon"><use href="#i-capture" /></svg>
+          </button>
           <button id="settingsBtn" class="icon-btn" type="button" title="Detection settings" aria-label="Detection settings" aria-expanded="false" aria-controls="settingsDrawer">
             <svg class="icon"><use href="#i-sliders" /></svg>
           </button>
@@ -80,11 +84,14 @@
                   <button id="pickBtn" type="button" class="btn btn-primary">
                     <svg class="icon"><use href="#i-image" /></svg><span>Choose image</span>
                   </button>
+                  <button id="captureBtnDrop" type="button" class="btn" hidden>
+                    <svg class="icon"><use href="#i-capture" /></svg><span>Capture screen</span>
+                  </button>
                   <button id="pasteBtn" type="button" class="btn">
                     <svg class="icon"><use href="#i-clipboard" /></svg><span>Paste</span>
                   </button>
                 </div>
-                <p class="dropzone-hint">or press <kbd>Ctrl</kbd> <kbd>V</kbd> anywhere</p>
+                <p class="dropzone-hint">or press <kbd>Ctrl</kbd> <kbd>V</kbd> anywhere<span id="captureHint" hidden> · <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>R</kbd> captures the screen, even from another app</span></p>
               </div>
 
               <div class="canvas-wrap">

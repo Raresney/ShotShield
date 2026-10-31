@@ -254,7 +254,7 @@ kbd {
 .dropzone-title { font-size: 20px; font-weight: 680; letter-spacing: -0.02em; }
 .dropzone-sub { margin-top: 8px; color: var(--text-2); max-width: 340px; }
 .dropzone-actions { display: flex; gap: 8px; margin-top: 22px; }
-.dropzone-hint { margin-top: 16px; font-size: 12px; color: var(--text-3); }
+.dropzone-hint { margin-top: 16px; font-size: 12px; color: var(--text-3); line-height: 2; }
 
 .canvas-wrap {
   position: absolute; inset: 20px 20px 76px;
