@@ -65,6 +65,7 @@ function compileCustom(r: CustomRule): CompiledRule {
 export function scan(text: string, config?: ScanConfig): Detection[] {
   const rules = compile(config);
   const minConfidence = config?.minConfidence ?? 0;
+  const allowed = allowMatcher(config?.allow);
   const found: Detection[] = [];
 
   for (const rule of rules) {
@@ -93,6 +94,7 @@ export function scan(text: string, config?: ScanConfig): Detection[] {
         if (res.confidence !== undefined) confidence = res.confidence;
       }
       if (confidence < minConfidence) continue;
+      if (allowed(raw)) continue;
       found.push({
         category: rule.category,
         label,
@@ -107,6 +109,41 @@ export function scan(text: string, config?: ScanConfig): Detection[] {
   }
 
   return resolveOverlaps(found);
+}
+
+// OCR spacing and case vary between screenshots of the same value, so both
+// sides are compared without them. Each entry is a whole-value glob.
+const squash = (s: string): string => s.replace(/\s+/g, "").toLowerCase();
+
+function allowMatcher(entries: string[] | undefined): (value: string) => boolean {
+  const globs = (entries ?? [])
+    .map(squash)
+    .filter((e) => e.replace(/\*/g, "").length > 0) // a bare * would hide everything
+    .map((e) => e.split("*"));
+  if (globs.length === 0) return () => false;
+  return (value) => {
+    const v = squash(value);
+    return globs.some((parts) => globMatch(parts, v));
+  };
+}
+
+// Whole-string glob match, `parts` being the pattern split on "*". The first
+// part anchors the start, the last the end, and the ones between are found in
+// order. Linear in the value, so a pattern full of stars can't blow up the way
+// the equivalent regex could.
+function globMatch(parts: string[], value: string): boolean {
+  const first = parts[0]!;
+  const last = parts[parts.length - 1]!;
+  if (parts.length === 1) return value === first;
+  if (!value.startsWith(first) || !value.endsWith(last) || value.length < first.length + last.length) return false;
+  let at = first.length;
+  const end = value.length - last.length;
+  for (const part of parts.slice(1, -1)) {
+    const found = value.indexOf(part, at);
+    if (found < 0 || found + part.length > end) return false;
+    at = found + part.length;
+  }
+  return true;
 }
 
 // When two detections overlap, keep the stronger one (severity, then

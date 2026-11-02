@@ -82,3 +82,10 @@ test("random fuzz: scan never throws", () => {
     assert.doesNotThrow(() => scan(s));
   }
 });
+
+test("an allow entry full of stars stays fast on a long value", () => {
+  const key = "-----BEGIN PRIVATE KEY-----\n" + "A".repeat(4000) + "\n-----END PRIVATE KEY-----";
+  const t0 = performance.now();
+  scan(key, { allow: ["*a*a*a*a*a*a*a*a*a*a*a*a*b"] });
+  assert.ok(performance.now() - t0 < 200);
+});
