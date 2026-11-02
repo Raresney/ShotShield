@@ -49,3 +49,14 @@ test("an IBAN whose country code came back as R0O", () => {
   assert.deepEqual(labels("PAYOUT_IBAN=R0O49AAAA1B31007593840000"), ["IBAN"]);
   assert.ok(!labels("R0O49AAAA1B31007593840001").includes("IBAN"), "checksum still decides");
 });
+
+test("the same .env read by another renderer: @ inside the token, spaced login", () => {
+  const text =
+    "DATABASE_URL=postgres://admin: Tr@ub4dor-77@db. internal :5432/app\n" +
+    "GITHUB_TOKEN=ghp_" + "R7nQ2mK9xV4bT6wL1pZ8cJ3hF5dS@aE2yU7i\n";
+  const d = scan(text);
+  assert.deepEqual(d.map((x) => x.label), ["Credentials in URL", "GitHub token"]);
+  assert.ok(d[0]!.text.includes("Tr@ub4dor-77"), "the whole password is covered");
+  // A short token-ish run with @ is still not a token.
+  assert.deepEqual(labels("ghp_" + "abc@def"), []);
+});

@@ -118,7 +118,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // into @ and a kerning gap into a space. Taken when the body, once those are
   // undone, is still 35-37 characters.
   { category: "api_key", label: "GitHub token", severity: "critical",
-    source: `gh[pousr]${U}[A-Za-z0-9@]{12,}(?: [A-Za-z0-9@]{3,}){1,2}(?![A-Za-z0-9@])`,
+    source: `gh[pousr]${U}[A-Za-z0-9@]{12,}(?: [A-Za-z0-9@]{3,}){0,2}(?![A-Za-z0-9@])`,
     baseConfidence: 0.9,
     refine: (raw) => {
       const body = raw.slice(4).replace(/ /g, "");
@@ -190,13 +190,17 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // A database / mail / file-transfer URL with `user:` in it carries a
   // password even when OCR lost the `@` (a monospace @ often reads as Q). The
   // scheme is the precision here; the part after `user:` must hold a letter, so
-  // a bare `host:port` (redis://cache:6379) never matches.
+  // a bare `host:port` (redis://cache:6379) never matches. OCR can also space
+  // out the colon after the user ("admin: Tr…") and turn a slashed zero in the
+  // password into another @, so the password runs to the last @, not the first.
   { category: "credential", label: "Credentials in URL", severity: "critical",
-    source: "\\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\\+srv)?|rediss?|amqps?|mssql|sqlserver|s?ftps?|smtps?|ldaps?): ?//[^\\s:/@]{1,64}:[^\\s/]{1,200}",
+    source: "\\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\\+srv)?|rediss?|amqps?|mssql|sqlserver|s?ftps?|smtps?|ldaps?): ?//[^\\s:/@]{1,64}: ?[^\\s/]{1,200}",
     baseConfidence: 0.85,
     refine: (raw) => {
       const rest = raw.slice(raw.indexOf("//") + 2);
-      const pass = rest.slice(rest.indexOf(":") + 1).split("@")[0]!;
+      const afterUser = rest.slice(rest.indexOf(":") + 1).trimStart();
+      const at = afterUser.lastIndexOf("@");
+      const pass = at > 0 ? afterUser.slice(0, at) : afterUser;
       return /[A-Za-z]/.test(pass) && pass.length >= 6 && looksLikeSecretValue(pass) ? {} : false;
     } },
 
