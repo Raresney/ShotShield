@@ -45,6 +45,9 @@ export function orientedCanvas(src: Source, turns: number, maxDim = Infinity): H
 /** Which OCR render to prepare: the normal pass, or the second-look retry. */
 export type OcrLook = "first" | "second";
 
+/** Below this many grey levels, the stretch would only amplify noise. */
+const MIN_STRETCH_SPAN = 48;
+
 /**
  * Prepare an image for OCR. Phone photos of ID cards are noisy and their text is
  * small, so Tesseract often misreads a digit — and a single wrong digit fails the
@@ -105,7 +108,10 @@ export function preprocessForOcr(src: Source, look: OcrLook = "first"): { canvas
     if (acc >= cut) { hi = v; break; }
   }
   const span = hi - lo;
-  if (span > 0) {
+  // On a near-blank page (a scanned letter is >98% paper) both percentiles land
+  // in the paper's JPEG noise, and stretching that sliver would blow the noise
+  // up into black speckle that buries the text. Only stretch real contrast.
+  if (span >= MIN_STRETCH_SPAN) {
     const k = 255 / span;
     for (let i = 0; i < d.length; i += 4) {
       let v = ((d[i]! - lo) * k) | 0;
