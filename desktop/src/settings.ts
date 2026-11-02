@@ -59,6 +59,10 @@ export interface Settings {
   minConfidence: number;
   /** How a covered region is drawn on the image. */
   cover: CoverStyle;
+  /** Closing the window keeps ShotShield in the tray (Windows). */
+  tray: boolean;
+  /** Put a capture on the clipboard as soon as it's covered (Windows). */
+  copyCaptures: boolean;
 }
 
 const STORAGE_KEY = "shotshield.settings";
@@ -66,7 +70,7 @@ const STORAGE_KEY = "shotshield.settings";
 function defaults(): Settings {
   const enabled: Partial<Record<Category, boolean>> = {};
   for (const g of GROUPS) for (const { cat } of g.items) if (cat !== "face") enabled[cat] = true;
-  return { enabled, faces: true, minConfidence: 0, cover: "solid" };
+  return { enabled, faces: true, minConfidence: 0, cover: "solid", tray: true, copyCaptures: false };
 }
 
 // Merge whatever was saved over the defaults, so a category added in a later
@@ -83,6 +87,8 @@ export function loadSettings(): Settings {
       minConfidence:
         typeof saved.minConfidence === "number" ? saved.minConfidence : base.minConfidence,
       cover: saved.cover === "mosaic" ? "mosaic" : "solid",
+      tray: saved.tray ?? base.tray,
+      copyCaptures: saved.copyCaptures ?? base.copyCaptures,
     };
   } catch {
     return base; // unavailable or corrupt storage: fall back to defaults
@@ -102,9 +108,22 @@ export function scanConfig(s: Settings): ScanConfig {
   return { enabled: s.enabled, minConfidence: s.minConfidence };
 }
 
+/** What the Background section needs from the app shell (Windows only). */
+export interface BackgroundHooks {
+  setTray(on: boolean): void;
+  autostart: boolean;
+  setAutostart(on: boolean): Promise<void>;
+}
+
 // Build the panel into `body` and wire every control to persist, then call
-// `onChange` so the caller can refresh the current scan.
-export function renderSettings(body: HTMLElement, s: Settings, onChange: () => void): void {
+// `onChange` so the caller can refresh the current scan. `background` adds the
+// tray and start-at-login switches where the app supports them.
+export function renderSettings(
+  body: HTMLElement,
+  s: Settings,
+  onChange: () => void,
+  background?: BackgroundHooks,
+): void {
   body.replaceChildren();
   const commit = () => {
     save(s);
@@ -134,6 +153,32 @@ export function renderSettings(body: HTMLElement, s: Settings, onChange: () => v
   note.textContent = "Hide findings the engine is less sure about.";
   sens.append(note, slider(s, commit));
   body.append(sens);
+
+  if (background) body.append(backgroundGroup(s, commit, background));
+}
+
+function backgroundGroup(s: Settings, commit: () => void, hooks: BackgroundHooks): HTMLElement {
+  const section = group("Background");
+  const note = document.createElement("p");
+  note.className = "set-note";
+  note.textContent = "Keep Ctrl+Alt+R ready with the window closed.";
+  section.append(
+    note,
+    toggle("Keep running in the tray", s.tray, (on) => {
+      s.tray = on;
+      hooks.setTray(on);
+      commit();
+    }),
+    toggle("Start with Windows", hooks.autostart, (on) => {
+      hooks.autostart = on;
+      void hooks.setAutostart(on);
+    }),
+    toggle("Copy captures once covered", s.copyCaptures, (on) => {
+      s.copyCaptures = on;
+      commit();
+    }),
+  );
+  return section;
 }
 
 function group(title: string): HTMLElement {
