@@ -3,6 +3,9 @@
 // fonts, CMaps, wasm decoders) are copied into public/vendor/pdfjs on
 // predev/prebuild, so this works offline like the rest of the app.
 
+import type { OcrResult } from "./ocr.ts";
+import { textLayerToOcr, type TextItemLike } from "./pdftext.ts";
+
 /** Pages rendered at this resolution read well with OCR without being huge. */
 const RENDER_DPI = 200;
 /** A very long PDF would take ages to scan; open the first pages and say so. */
@@ -18,6 +21,10 @@ export interface PdfPage {
   pages: number;
   /** PDF points per rendered pixel, to save the page back at its original size. */
   ptPerPx: number;
+  /** The page's own text with word boxes, when it has any (a digital PDF). */
+  text: OcrResult | null;
+  /** Whether the page draws images, which only OCR and face detection can read. */
+  hasImages: boolean;
 }
 
 export class PdfError extends Error {
@@ -76,11 +83,41 @@ export async function* pdfPages(file: File, maxDim: number): AsyncGenerator<PdfP
       canvas.height = Math.round(viewport.height);
       // White behind the page: a transparent PDF would otherwise OCR as black.
       await page.render({ canvas, viewport, background: "#ffffff" }).promise;
-      yield { name: pageName(file.name, n, pages), dataUrl: canvas.toDataURL("image/png"), page: n, pages, ptPerPx: 1 / scale };
+      const content = await page.getTextContent();
+      const items: TextItemLike[] = [];
+      for (const item of content.items) {
+        if (!("str" in item)) continue;
+        items.push({
+          str: item.str,
+          transform: pdfjs.Util.transform(viewport.transform, item.transform),
+          width: item.width * scale,
+          hasEOL: item.hasEOL,
+          fontFamily: content.styles[item.fontName]?.fontFamily,
+        });
+      }
+      const text = textLayerToOcr(items, measureText);
+      const ops = await page.getOperatorList();
+      const imageOps = new Set([pdfjs.OPS.paintImageXObject, pdfjs.OPS.paintInlineImageXObject, pdfjs.OPS.paintImageXObjectRepeat]);
+      yield {
+        name: pageName(file.name, n, pages),
+        dataUrl: canvas.toDataURL("image/png"),
+        page: n,
+        pages,
+        ptPerPx: 1 / scale,
+        text: /\S/.test(text.text) ? text : null,
+        hasImages: ops.fnArray.some((fn) => imageOps.has(fn)),
+      };
       page.cleanup();
     }
   } finally {
     // Stops the worker too, so a closed PDF doesn't keep its memory.
     void task.destroy();
   }
+}
+
+let measureCtx: CanvasRenderingContext2D | null = null;
+function measureText(text: string, family: string): number {
+  measureCtx ??= document.createElement("canvas").getContext("2d")!;
+  measureCtx.font = `100px ${family}`;
+  return measureCtx.measureText(text).width;
 }
