@@ -24,6 +24,10 @@ dist-ssr/
 # The tiny face detector model is copied from node_modules on predev/prebuild.
 /desktop/public/vendor/faceapi/
 
+# ───── pdf.js runtime (desktop) ─────
+# Worker, fonts, CMaps and wasm decoders are copied from node_modules on predev/prebuild.
+/desktop/public/vendor/pdfjs/
+
 # ───── Flutter (mobile) ─────
 .dart_tool/
 .flutter-plugins
