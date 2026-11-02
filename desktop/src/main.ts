@@ -1530,16 +1530,55 @@ if (canCapture) {
       try {
         const bytes = await invoke<ArrayBuffer>("capture_take");
         const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
-        await addImages([new File([bytes], `capture-${stamp}.png`, { type: "image/png" })]);
+        const name = `capture-${stamp}.png`;
+        await addImages([new File([bytes], name, { type: "image/png" })]);
+        if (settings.copyCaptures) void copyWhenCovered(name);
       } catch (err) {
         console.error("Couldn't receive the capture", err);
       }
+    });
+
+    // Tray and start-at-login live in the Rust side; the window tells it what
+    // the settings say, then adds their switches to the drawer.
+    void invoke("set_background", { enabled: settings.tray });
+    const autostart = await invoke<boolean>("autostart_enabled").catch(() => false);
+    renderSettings(settingsBody, settings, onSettingsChange, {
+      setTray: (on) => void invoke("set_background", { enabled: on }),
+      autostart,
+      setAutostart: async (on) => {
+        try {
+          await invoke("set_autostart", { enabled: on });
+        } catch (err) {
+          console.error("Couldn't change start at login", err);
+          notify("Couldn't change start with Windows.");
+        }
+      },
     });
     await listen<string>("capture-failed", (e) => {
       console.error("Capture failed", e.payload);
       if (!cur) summary.textContent = `Couldn't capture the screen: ${e.payload}`;
     });
   })();
+}
+
+// The capture-to-chat shortcut: once the capture's scan is done, put the
+// covered image on the clipboard so it can be pasted straight away.
+async function copyWhenCovered(name: string): Promise<void> {
+  const doc = docs.find((d) => d.name === name);
+  if (!doc) return;
+  while (doc.status === "queued" || doc.status === "scanning") {
+    await new Promise((r) => setTimeout(r, 150));
+    if (!docs.includes(doc)) return;
+  }
+  if (doc.status !== "done") return;
+  try {
+    const blob = await canvasBlob(renderDoc(doc));
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    notify(`Copied the covered capture · ${doc.regions.length} ${doc.regions.length === 1 ? "finding" : "findings"} hidden`);
+  } catch (err) {
+    console.error("Clipboard copy failed", err);
+    notify("Couldn't copy the capture to the clipboard.");
+  }
 }
 
 // ── Updates ──

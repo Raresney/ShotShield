@@ -31,6 +31,10 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 
 [target."cfg(windows)".dependencies]
+# The tray icon and start-at-login keep Ctrl+Alt+R available with the window
+# closed. Windows-only like capture, which is what they're for.
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
 image = { version = "0.25", default-features = false, features = ["png"] }
 tauri-plugin-global-shortcut = "2"
 xcap = { version = "0.9", default-features = false }

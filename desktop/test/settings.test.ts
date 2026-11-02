@@ -32,6 +32,12 @@ describe("loadSettings", () => {
     expect(loadSettings().cover).toBe("solid");
   });
 
+  it("keeps the tray on and capture copying off unless saved otherwise", () => {
+    expect(loadSettings()).toMatchObject({ tray: true, copyCaptures: false });
+    localStorage.setItem("shotshield.settings", JSON.stringify({ tray: false, copyCaptures: true }));
+    expect(loadSettings()).toMatchObject({ tray: false, copyCaptures: true });
+  });
+
   it("falls back to defaults on corrupt storage", () => {
     localStorage.setItem("shotshield.settings", "{ not json");
     const s = loadSettings();
