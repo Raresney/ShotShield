@@ -9,6 +9,7 @@ Find sensitive data in a screenshot and cover it before you share the image. Run
 [![License](https://img.shields.io/badge/license-proprietary-red)](LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/Raresney/ShotShield?sort=semver)](https://github.com/Raresney/ShotShield/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Raresney/ShotShield/total)](https://github.com/Raresney/ShotShield/releases)
+[![Website](https://img.shields.io/badge/website-raresney.github.io%2FShotShield-2dd4bf)](https://raresney.github.io/ShotShield/)
 ![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri-24C8DB?logo=tauri&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 
