@@ -71,3 +71,4 @@ desktop.ini
 # ───── Playwright (desktop e2e) ─────
 /desktop/test-results/
 /desktop/playwright-report/
+/desktop/scripts/demo/out/

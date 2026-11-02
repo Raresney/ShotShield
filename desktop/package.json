@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",
+    "demo": "playwright test --config playwright.demo.config.ts && node scripts/demo/to-gif.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
