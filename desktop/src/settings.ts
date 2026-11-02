@@ -45,6 +45,7 @@ const GROUPS: { title: string; items: { cat: Category | "face"; label: string }[
     items: [
       { cat: "email", label: "Email addresses" },
       { cat: "phone", label: "Phone numbers" },
+      { cat: "address", label: "Postal addresses" },
       { cat: "ip_address", label: "Public IP addresses" },
     ],
   },
