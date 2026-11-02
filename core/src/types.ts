@@ -18,6 +18,8 @@ export type Category =
   | "phone"
   | "crypto_wallet"
   | "ip_address"
+  | "license_plate"
+  | "address"
   | "face"
   | "custom";
 

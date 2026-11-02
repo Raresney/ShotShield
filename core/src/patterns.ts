@@ -350,6 +350,53 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     source: "[Ss][Ee][Rr][Ii][Aa]\\s+[A-Z]{2}\\s*(?:[Nn][Rr]\\.?|[Nn]um[ăa]r)?\\s*\\d{6}",
     baseConfidence: 0.9 },
 
+  // Passport and driving licence numbers have no checksum and no shape of
+  // their own (a run of digits, sometimes a letter), so they're only taken
+  // behind their printed label, in Romanian or English. Leading boundary only:
+  // OCR often glues the label onto the value.
+  { category: "id_document", label: "Passport number", severity: "high",
+    source: "(?<=\\b(?:[Nn]r\\.?\\s?(?:al\\s)?[Pp]a[sșş]aport(?:ului)?|PA[SȘŞ]APORT\\s?NR\\.?|[Pp]assport\\s?(?:[Nn]o\\.?|[Nn]umber|[Nn]r\\.?)|PASSPORT\\s?NO\\.?)[\\s:./]{0,4})(?=[A-Z0-9]*\\d)[A-Z0-9]{6,10}(?![A-Za-z0-9])",
+    baseConfidence: 0.85 },
+  { category: "id_document", label: "Driving licence number", severity: "high",
+    source: "(?<=\\b(?:[Nn]r\\.?\\s?(?:al\\s)?[Pp]ermis(?:ului)?(?:\\sde\\sconducere)?|[Pp]ermis(?:\\sde\\sconducere)?\\s?[Nn]r\\.?|[Dd]riving\\s[Ll]icen[cs]e\\s?(?:[Nn]o\\.?|[Nn]umber)|[Ll]icen[cs]e\\s?[Nn]o\\.?)[\\s:./]{0,4})(?=[A-Z0-9]*\\d)[A-Z0-9]{5,13}(?![A-Za-z0-9])",
+    baseConfidence: 0.85 },
+
+  // ── Postal addresses ────────────────────────────────────────────────────────
+  // A street with its number: a Romanian street word (Str., Bd., Calea, Șos.,
+  // Aleea…) then a capitalised name and "nr. 12", carrying the block/stair/
+  // floor/flat parts that usually follow; or the English "12 Baker Street".
+  // Both shapes need the street word AND a number, which prose rarely has.
+  { category: "address", label: "Street address", severity: "medium",
+    source: "\\b(?:[Ss]tr(?:ada)?\\.?|STR\\.?|[Bb]d\\.?|BD\\.?|[Bb]ulevardul|B-dul|[Cc]alea|[ȘŞS]o[sșş](?:eaua)?\\.?|[Aa]leea|[Pp]ia[țţt]a|[Ss]plaiul|[Ii]ntr(?:area)?\\.?)\\s+[A-ZĂÂÎȘȚŞŢ0-9][\\p{L}0-9.'\\- ]{1,40}?,?\\s*(?:[Nn]r|NR)\\.?\\s*\\d{1,4}[A-Za-z]?(?:,?\\s*(?:[Bb]l|[Ss]c|[Ee]t|[Aa]p|BL|SC|ET|AP)\\.?\\s*[A-Za-z0-9]{1,4}){0,4}",
+    flags: "u", baseConfidence: 0.85 },
+  { category: "address", label: "Street address", severity: "medium",
+    source: "\\b\\d{1,5}\\s+(?:[A-Z][a-z]+\\s){1,3}(?:Street|St\\.|Avenue|Ave\\.|Road|Rd\\.|Boulevard|Blvd\\.|Lane|Ln\\.|Drive|Dr\\.|Way|Court|Ct\\.|Place|Pl\\.)(?![A-Za-z])",
+    baseConfidence: 0.8 },
+  // Whatever follows an address label, to the end of its line: the buletin's
+  // "Domiciliu", a form's "Adresa:" or "Address:". The label is the evidence,
+  // so the value only needs to look like more than one word with a letter.
+  { category: "address", label: "Address", severity: "medium",
+    // "IP address", "Email address" and the like are someone else's field.
+    source: "(?<=(?<!(?:IP|MAC|[Ee]-?[Mm]ail|[Ww]allet|[Ss]erver|[Ww]eb|URL)\\s)\\b(?:[Aa]dres[aă](?:\\sde\\sdomiciliu)?|ADRES[AĂ]|[Dd]omiciliu(?:l)?|DOMICILIU|[Aa]ddress|ADDRESS|[Hh]ome\\saddress)\\s?[:/]?\\s{0,3})(?=[^\\n]{0,80}\\p{L})[^\\s:][^\\n]{4,79}",
+    flags: "u", baseConfidence: 0.75,
+    refine: (raw) => {
+      const v = raw.trim();
+      // An email or a URL after "Address:" belongs to their own detectors.
+      if (/@|https?:\/\/|^[\w.-]+\.[a-z]{2,}$/i.test(v) || !/\s/.test(v)) return false;
+      return {};
+    } },
+
+  // ── Vehicles ────────────────────────────────────────────────────────────────
+  // A Romanian number plate: county code, two digits (two or three in
+  // Bucharest), three letters, e.g. "CJ 12 ABC" or "B 123 XYZ". Only the 42
+  // real county codes count, and the plate must stand alone as uppercase, so a
+  // code identifier or prose word rarely looks like one. The letter group never
+  // starts with I or O on real plates (they read as 1 and 0), which also rules
+  // out most English words.
+  { category: "license_plate", label: "Licence plate (RO)", severity: "medium",
+    source: "(?<![A-Za-z0-9])(?:B[ -]?\\d{2,3}|(?:AB|AG|AR|BC|BH|BN|BR|BT|BV|BZ|CJ|CL|CS|CT|CV|DB|DJ|GJ|GL|GR|HD|HR|IF|IL|IS|MH|MM|MS|NT|OT|PH|SB|SJ|SM|SV|TL|TM|TR|VL|VN|VS)[ -]?\\d{2})[ -]?[A-HJ-NP-Z][A-Z]{2}(?![A-Za-z0-9])",
+    baseConfidence: 0.8 },
+
   // ── Name ────────────────────────────────────────────────────────────────────
   // The holder's name behind a buletin's trilingual Nume/Nom/Last-name labels.
   // The lookbehind matches the label but keeps it out of the hit, so only the

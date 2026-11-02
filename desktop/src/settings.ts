@@ -33,10 +33,11 @@ const GROUPS: { title: string; items: { cat: Category | "face"; label: string }[
     items: [
       { cat: "face", label: "Faces" },
       { cat: "national_id", label: "CNP" },
-      { cat: "id_document", label: "ID card number" },
+      { cat: "id_document", label: "ID, passport & licence numbers" },
       { cat: "mrz", label: "Passport / ID MRZ" },
       { cat: "tax_id", label: "Tax ID (CUI / CIF)" },
       { cat: "name", label: "Names" },
+      { cat: "license_plate", label: "Licence plates" },
     ],
   },
   {
@@ -44,6 +45,7 @@ const GROUPS: { title: string; items: { cat: Category | "face"; label: string }[
     items: [
       { cat: "email", label: "Email addresses" },
       { cat: "phone", label: "Phone numbers" },
+      { cat: "address", label: "Postal addresses" },
       { cat: "ip_address", label: "Public IP addresses" },
     ],
   },

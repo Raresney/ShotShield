@@ -33,8 +33,10 @@ The engine reads the text in an image with OCR, then runs it through a table of 
 - CVV codes, when they sit right next to their label
 - Romanian CNP and CUI/CIF, each confirmed by its control digit
 - Romanian ID cards: the printed "SERIA … NR …" line and the machine-readable zone along the bottom
+- Passport and driving licence numbers behind their label (`Nr. pașaport`, `Passport No.`, `Nr. permis`), and Romanian number plates (`CJ 12 ABC`, `B 123 XYZ`) checked against the real county codes
 - People's names behind a label: the ID card's Nume/Nom/Last name, or a form's `Name:`, `Cardholder:`, `Titular cont:`, `Beneficiar:` and the like
 - Emails, and phone numbers in international or Romanian form
+- Postal addresses: a street with its number (`Str. Mihai Eminescu nr. 12, bl. A3, ap. 14`, `221 Baker Street`) or the line after an address label such as `Domiciliu:` or `Address:`
 - Bitcoin (checksum-verified) and Ethereum wallet addresses
 - Public IP addresses — listed, but left visible unless you cover them
 - Faces, from a small detector that runs inside the app
