@@ -3,7 +3,7 @@ import "@fontsource-variable/jetbrains-mono";
 import "./styles.css";
 
 import { scan, type Detection, type Severity } from "@shotshield/core";
-import { ocr, ocrAutoOrient, ocrSecondLook, type Box, type OcrWord, type ProgressFn } from "./ocr.ts";
+import { ocr, ocrAutoOrient, ocrSecondLook, type Box, type OcrResult, type OcrWord, type ProgressFn } from "./ocr.ts";
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
 import { locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, boxGripAt, dragBox, SEVERITY_RANK, type BoxGrip, type Region } from "./redact.ts";
@@ -363,7 +363,16 @@ interface Doc {
   progress: { fraction: number | null; label: string };
   error?: string;
   /** Set when the image is a page of an opened PDF, so it can be saved back as one. */
-  pdf?: { group: number; file: string; page: number; ptPerPx: number };
+  pdf?: {
+    group: number;
+    file: string;
+    page: number;
+    ptPerPx: number;
+    /** The page's own text layer, read instead of (or alongside) OCR. */
+    text: OcrResult | null;
+    /** Images on the page still need OCR and face detection. */
+    hasImages: boolean;
+  };
   thumb: string;
 }
 
@@ -462,11 +471,18 @@ async function analyze(doc: Doc): Promise<void> {
     else setProgress(doc, fraction, secondPass ? "Taking a closer look" : "Reading text");
   };
 
+  // A digital PDF page brings its own text, exact and instant. OCR then only
+  // runs when the page also draws images (a scanned ID pasted into a form),
+  // since those are the only parts the text layer can't see.
+  const layer = doc.pdf?.text ?? null;
+  const needOcr = !layer || doc.pdf!.hasImages;
   let text = "";
   let words: OcrWord[] = [];
   let working = doc.shown;
   try {
-    if (doc.autoOrient) {
+    if (!needOcr) {
+      // Nothing to read: the text layer below is the whole story.
+    } else if (doc.autoOrient) {
       const oriented = await ocrAutoOrient(doc.shown, onProgress);
       if (!alive()) return;
       // The boxes come back in the upright frame, so show the image that way too.
@@ -494,14 +510,15 @@ async function analyze(doc: Doc): Promise<void> {
     return;
   }
 
-  const passes = [{ text, words }];
+  const passes = layer ? [layer] : [];
+  if (needOcr && (text.trim() || !layer)) passes.push({ text, words });
 
   // Second look: when the image clearly reads as a Romanian ID but the CNP —
   // the field a marginal, scale-dependent read loses most often — came back
   // empty, retry once at a deliberately different render scale and keep both
   // passes. Best-effort: a retry failure must not drop the first pass.
   const firstDets = scan(text, scanConfig(settings));
-  if (needsSecondLook(firstDets, text, settings.enabled.national_id ?? true)) {
+  if (needOcr && needsSecondLook(firstDets, text, settings.enabled.national_id ?? true)) {
     secondPass = true;
     setProgress(doc, 0, "Taking a closer look");
     try {
@@ -517,13 +534,15 @@ async function analyze(doc: Doc): Promise<void> {
   // Faces are best-effort and detected once per image, then cached: a model-load
   // failure must not drop the text findings, and toggling the Faces setting later
   // shouldn't re-run the detector.
-  setProgress(doc, null, "Looking for faces");
   let faces: Region[] = [];
-  try {
-    const { detectFaces } = await import("./faces.ts");
-    faces = (await detectFaces(working)).map(faceRegion);
-  } catch (err) {
-    console.error("Face detection failed", err);
+  if (needOcr) {
+    setProgress(doc, null, "Looking for faces");
+    try {
+      const { detectFaces } = await import("./faces.ts");
+      faces = (await detectFaces(working)).map(faceRegion);
+    } catch (err) {
+      console.error("Face detection failed", err);
+    }
   }
   if (!alive()) return;
 
@@ -634,11 +653,13 @@ async function addImages(files: File[]): Promise<void> {
       undo: [],
       redo: [],
       status: "queued",
-      autoOrient: true,
       token: 0,
       progress: { fraction: null, label: "Waiting in line" },
       thumb: thumbOf(shown),
       pdf,
+      // A rendered PDF page is already upright; turning it would also move it
+      // away from its text layer's coordinates.
+      autoOrient: !pdf,
     };
     docs.push(doc);
     first ??= doc;
@@ -655,7 +676,14 @@ async function addImages(files: File[]): Promise<void> {
     const group = nextPdfGroup++;
     try {
       for await (const page of pdfPages(file, MAX_WORKING_DIM)) {
-        await add(page.name, page.dataUrl, { group, file: file.name, page: page.page, ptPerPx: page.ptPerPx });
+        await add(page.name, page.dataUrl, {
+          group,
+          file: file.name,
+          page: page.page,
+          ptPerPx: page.ptPerPx,
+          text: page.text,
+          hasImages: page.hasImages,
+        });
         if (page.page === MAX_PDF_PAGES && page.pages > MAX_PDF_PAGES) {
           problem = `Opened the first ${MAX_PDF_PAGES} of ${page.pages} pages.`;
         }
@@ -1388,6 +1416,8 @@ rotateBtn.addEventListener("click", async () => {
     status: "queued" as DocStatus,
     autoOrient: false,
     thumb: thumbOf(rotated),
+    // The text layer's boxes are for the unrotated page; read it with OCR now.
+    pdf: doc.pdf && { ...doc.pdf, text: null, hasImages: true },
   });
   showDoc(doc);
   void pump();
