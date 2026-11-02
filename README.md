@@ -21,6 +21,8 @@ Find sensitive data in a screenshot and cover it before you share the image. Run
 
 You paste a screenshot into a chat or an issue, and only later notice it had an API key in the corner, or an IBAN, or your own face. ShotShield scans the picture locally, marks what it finds, and lets you paint over it. The redaction is baked into the file you export, not just drawn on top for show.
 
+<p align="center"><img src="docs/demo.gif" alt="A .env screenshot dropped into ShotShield: database URL, Stripe and GitHub keys, email, phone and IBAN covered in a few seconds" width="860" /></p>
+
 ## What it catches
 
 The engine reads the text in an image with OCR, then runs it through a table of matchers. Most of them lean on a checksum or a printed label, so they stay quiet on random digits:
