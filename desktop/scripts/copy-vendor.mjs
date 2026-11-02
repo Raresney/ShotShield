@@ -31,4 +31,21 @@ for (const f of ["tiny_face_detector_model-weights_manifest.json", "tiny_face_de
   cpSync(join(modelDir, f), join(faces, f));
 }
 
+// ── pdf.js (PDF pages) ──
+// The worker that parses the file, plus what it loads on demand: CMaps and the
+// standard fonts for PDFs that don't embed theirs, ICC profiles, and the wasm
+// image decoders. The scripting engine (quickjs) is left out: PDF JavaScript
+// never runs here.
+const pdf = join(vendor, "pdfjs");
+const pdfDir = dirname(require.resolve("pdfjs-dist/package.json"));
+mkdirSync(pdf, { recursive: true });
+cpSync(join(pdfDir, "build", "pdf.worker.min.mjs"), join(pdf, "pdf.worker.min.mjs"));
+for (const d of ["cmaps", "standard_fonts", "iccs"]) {
+  cpSync(join(pdfDir, d), join(pdf, d), { recursive: true });
+}
+cpSync(join(pdfDir, "wasm"), join(pdf, "wasm"), {
+  recursive: true,
+  filter: (src) => !/quickjs/.test(src),
+});
+
 console.log("vendor runtime copied to", vendor);

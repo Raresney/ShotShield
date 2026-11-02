@@ -10,6 +10,7 @@ import { locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, box
 import { canvasBlob, redactedName, saveAll, saveCanvas } from "./export.ts";
 import { loadSettings, renderSettings, scanConfig } from "./settings.ts";
 import { checkForUpdate, type PendingUpdate } from "./update.ts";
+import { isPdf, MAX_PDF_PAGES, PdfError, pdfPages } from "./pdf.ts";
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -43,6 +44,7 @@ const stageActions = $<HTMLDivElement>("#stageActions");
 const pickBtn = $<HTMLButtonElement>("#pickBtn");
 const pasteBtn = $<HTMLButtonElement>("#pasteBtn");
 const statusEngine = $<HTMLElement>("#statusEngine");
+const statusNotice = $<HTMLElement>("#statusNotice");
 const findingsCount = $<HTMLElement>("#findingsCount");
 const meterBar = $<HTMLElement>("#meterBar");
 const statusProtected = $<HTMLElement>("#statusProtected");
@@ -585,21 +587,24 @@ function updateExportState(): void {
   exportAllBtn.disabled = done !== docs.length;
 }
 
+// Images and PDFs both land here; a PDF opens as one image per page.
 async function addImages(files: File[]): Promise<void> {
-  const images = files.filter((f) => f.type.startsWith("image/"));
-  if (images.length === 0) return;
+  const accepted = files.filter((f) => f.type.startsWith("image/") || isPdf(f));
+  if (accepted.length === 0) return;
   if (mode !== "image") setMode("image");
   let first: Doc | null = null;
-  for (const file of images) {
+  let problem: string | null = null;
+  const add = async (name: string, dataUrl: string): Promise<void> => {
     let shown: HTMLImageElement;
     try {
-      shown = await fitToWorkingSize(await loadImageEl(await readAsDataURL(file)));
+      shown = await fitToWorkingSize(await loadImageEl(dataUrl));
     } catch {
-      continue; // an unreadable file is skipped, the rest still load
+      problem ??= `Couldn't load ${name}.`;
+      return; // an unreadable file is skipped, the rest still load
     }
     const doc: Doc = {
       id: nextDocId++,
-      name: file.name,
+      name,
       shown,
       img: null,
       ocr: [],
@@ -620,8 +625,35 @@ async function addImages(files: File[]): Promise<void> {
     if (doc === first) showDoc(doc);
     else renderFilm();
     void pump();
+  };
+  for (const file of accepted) {
+    if (!isPdf(file)) {
+      await add(file.name, await readAsDataURL(file).catch(() => ""));
+      continue;
+    }
+    try {
+      for await (const page of pdfPages(file, MAX_WORKING_DIM)) {
+        await add(page.name, page.dataUrl);
+        if (page.page === MAX_PDF_PAGES && page.pages > MAX_PDF_PAGES) {
+          problem = `Opened the first ${MAX_PDF_PAGES} of ${page.pages} pages.`;
+        }
+      }
+    } catch (err) {
+      problem = err instanceof PdfError && err.reason === "password"
+        ? `${file.name} is password-protected. Remove the password, then open it again.`
+        : `Couldn't read ${file.name}.`;
+    }
   }
-  if (!first) summary.textContent = "Couldn't load the image.";
+  if (problem) notify(problem);
+}
+
+// A short message in the status bar, for things that don't belong to one image.
+let noticeTimer = 0;
+function notify(msg: string): void {
+  statusNotice.textContent = msg;
+  statusNotice.hidden = false;
+  clearTimeout(noticeTimer);
+  noticeTimer = window.setTimeout(() => (statusNotice.hidden = true), 8000);
 }
 
 function readAsDataURL(file: File): Promise<string> {
