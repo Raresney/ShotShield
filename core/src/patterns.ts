@@ -350,6 +350,28 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     source: "[Ss][Ee][Rr][Ii][Aa]\\s+[A-Z]{2}\\s*(?:[Nn][Rr]\\.?|[Nn]um[ăa]r)?\\s*\\d{6}",
     baseConfidence: 0.9 },
 
+  // Passport and driving licence numbers have no checksum and no shape of
+  // their own (a run of digits, sometimes a letter), so they're only taken
+  // behind their printed label, in Romanian or English. Leading boundary only:
+  // OCR often glues the label onto the value.
+  { category: "id_document", label: "Passport number", severity: "high",
+    source: "(?<=\\b(?:[Nn]r\\.?\\s?(?:al\\s)?[Pp]a[sșş]aport(?:ului)?|PA[SȘŞ]APORT\\s?NR\\.?|[Pp]assport\\s?(?:[Nn]o\\.?|[Nn]umber|[Nn]r\\.?)|PASSPORT\\s?NO\\.?)[\\s:./]{0,4})(?=[A-Z0-9]*\\d)[A-Z0-9]{6,10}(?![A-Za-z0-9])",
+    baseConfidence: 0.85 },
+  { category: "id_document", label: "Driving licence number", severity: "high",
+    source: "(?<=\\b(?:[Nn]r\\.?\\s?(?:al\\s)?[Pp]ermis(?:ului)?(?:\\sde\\sconducere)?|[Pp]ermis(?:\\sde\\sconducere)?\\s?[Nn]r\\.?|[Dd]riving\\s[Ll]icen[cs]e\\s?(?:[Nn]o\\.?|[Nn]umber)|[Ll]icen[cs]e\\s?[Nn]o\\.?)[\\s:./]{0,4})(?=[A-Z0-9]*\\d)[A-Z0-9]{5,13}(?![A-Za-z0-9])",
+    baseConfidence: 0.85 },
+
+  // ── Vehicles ────────────────────────────────────────────────────────────────
+  // A Romanian number plate: county code, two digits (two or three in
+  // Bucharest), three letters, e.g. "CJ 12 ABC" or "B 123 XYZ". Only the 42
+  // real county codes count, and the plate must stand alone as uppercase, so a
+  // code identifier or prose word rarely looks like one. The letter group never
+  // starts with I or O on real plates (they read as 1 and 0), which also rules
+  // out most English words.
+  { category: "license_plate", label: "Licence plate (RO)", severity: "medium",
+    source: "(?<![A-Za-z0-9])(?:B[ -]?\\d{2,3}|(?:AB|AG|AR|BC|BH|BN|BR|BT|BV|BZ|CJ|CL|CS|CT|CV|DB|DJ|GJ|GL|GR|HD|HR|IF|IL|IS|MH|MM|MS|NT|OT|PH|SB|SJ|SM|SV|TL|TM|TR|VL|VN|VS)[ -]?\\d{2})[ -]?[A-HJ-NP-Z][A-Z]{2}(?![A-Za-z0-9])",
+    baseConfidence: 0.8 },
+
   // ── Name ────────────────────────────────────────────────────────────────────
   // The holder's name behind a buletin's trilingual Nume/Nom/Last-name labels.
   // The lookbehind matches the label but keeps it out of the hit, so only the
