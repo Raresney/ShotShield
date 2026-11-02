@@ -82,7 +82,7 @@
                 <p class="dropzone-sub">API keys, passwords, cards, IBANs, ID documents and faces — found and covered on this computer.</p>
                 <div class="dropzone-actions">
                   <button id="pickBtn" type="button" class="btn btn-primary">
-                    <svg class="icon"><use href="#i-image" /></svg><span>Choose image</span>
+                    <svg class="icon"><use href="#i-image" /></svg><span>Choose image or PDF</span>
                   </button>
                   <button id="captureBtnDrop" type="button" class="btn" hidden>
                     <svg class="icon"><use href="#i-capture" /></svg><span>Capture screen</span>
@@ -127,7 +127,7 @@
                 </button>
               </div>
 
-              <input id="file" type="file" accept="image/*" multiple hidden />
+              <input id="file" type="file" accept="image/*,application/pdf,.pdf" multiple hidden />
             </div>
             <div id="filmstrip" class="filmstrip" aria-label="Open images" hidden></div>
             <p id="drawHint" class="hint-line" hidden>
@@ -193,6 +193,7 @@
       <footer class="statusbar">
         <span id="statusEngine" class="status-engine">Ready</span>
         <span id="workspaceMeta" class="status-meta"></span>
+        <span id="statusNotice" class="status-notice" role="status" hidden></span>
         <span class="status-spacer"></span>
         <span><span id="statusProtected">0</span> covered</span>
         <span id="statusExposedWrap" class="status-exposed" hidden><span id="statusExposed">0</span> exposed</span>

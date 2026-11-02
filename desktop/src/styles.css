@@ -605,6 +605,7 @@ kbd {
 .status-engine.busy::before { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
 .status-spacer { flex: 1; }
 .status-exposed { color: var(--high); font-weight: 600; }
+.status-notice { color: var(--high); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status-muted { opacity: 0.8; }
 
 /* ── Motion ───────────────────────────────────── */
