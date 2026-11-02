@@ -3,7 +3,7 @@ import "@fontsource-variable/jetbrains-mono";
 import "./styles.css";
 
 import { scan, type Detection, type Severity } from "@shotshield/core";
-import { ocr, ocrAutoOrient, ocrSecondLook, type Box, type OcrResult, type OcrWord, type ProgressFn } from "./ocr.ts";
+import { ocr, ocrAutoOrient, ocrConcurrency, ocrSecondLook, type Box, type OcrResult, type OcrWord, type ProgressFn } from "./ocr.ts";
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
 import { locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, boxGripAt, dragBox, SEVERITY_RANK, type BoxGrip, type Region } from "./redact.ts";
@@ -382,8 +382,8 @@ window.addEventListener("blur", closeAllowMenu);
 
 // ── Image path ──
 // Every image the user brings in is a Doc: its own pixels, OCR cache, findings,
-// hand-drawn boxes and undo history. Docs scan one after another in the
-// background (the OCR worker is single-file anyway), so the first one can be
+// hand-drawn boxes and undo history. Docs scan in the background, a few at
+// a time (one per OCR worker, see pump()), so the first one can be
 // reviewed while the rest are still being read.
 type DocStatus = "queued" | "scanning" | "done" | "failed";
 interface Doc {
@@ -604,19 +604,20 @@ async function analyze(doc: Doc): Promise<void> {
   updateExportState();
 }
 
-// Scan queued docs one at a time. The one on screen goes first.
-let pumping = false;
-async function pump(): Promise<void> {
-  if (pumping) return;
-  pumping = true;
-  try {
-    for (;;) {
-      const next = cur?.status === "queued" ? cur : docs.find((d) => d.status === "queued");
-      if (!next) break;
-      await analyze(next);
-    }
-  } finally {
-    pumping = false;
+// Scan queued docs in the background, a few at a time.
+let scanning = 0;
+function pump(): void {
+  // As many scans at once as there are OCR workers; the one on screen goes
+  // first. analyze() marks its doc as scanning before its first await, so the
+  // next pick here never takes the same doc twice.
+  while (scanning < ocrConcurrency()) {
+    const next = cur?.status === "queued" ? cur : docs.find((d) => d.status === "queued");
+    if (!next) return;
+    scanning++;
+    void analyze(next).finally(() => {
+      scanning--;
+      pump();
+    });
   }
 }
 

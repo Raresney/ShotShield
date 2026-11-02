@@ -30,29 +30,49 @@ export interface OrientedOcr extends OcrResult {
 /** Phase lets the UI say "Reading…" vs "Checking orientation…". */
 export type ProgressFn = (phase: "reading" | "orienting", fraction: number) => void;
 
-let workerPromise: ReturnType<typeof createWorker> | null = null;
-let onProgress: ProgressFn | null = null;
-let phase: "reading" | "orienting" = "reading";
-
-// One worker already serializes recognize(); this serializes the JS around it too.
-// Without it a second scan starting mid-read overwrites onProgress/phase, and the
-// first scan's finally nulls progress while the second is still running. Each OCR
-// call acquires the lock first, so the progress lifecycle never overlaps.
-let lock: Promise<void> = Promise.resolve();
-function acquire(): Promise<() => void> {
-  const prev = lock;
-  let release!: () => void;
-  lock = new Promise<void>((res) => (release = res));
-  return prev.then(() => release);
+// A small pool of OCR workers, so a batch (or a PDF's pages) reads several
+// images at once. Each worker runs one image at a time and reports progress to
+// whoever holds it. Two or three, by core count: each worker holds its own
+// copy of the language models, so more would cost memory for little gain.
+export function ocrConcurrency(): number {
+  const cores = typeof navigator === "undefined" ? 2 : navigator.hardwareConcurrency || 2;
+  return Math.max(1, Math.min(3, Math.floor(cores / 2)));
 }
 
-// One worker, created on first use and reused. Every asset is local
+interface Slot {
+  worker: ReturnType<typeof createWorker> | null;
+  onProgress: ProgressFn | null;
+  phase: "reading" | "orienting";
+}
+
+const idle: Slot[] = [];
+const waiting: ((slot: Slot) => void)[] = [];
+let created = 0;
+
+function acquire(): Promise<Slot> {
+  const free = idle.pop();
+  if (free) return Promise.resolve(free);
+  if (created < ocrConcurrency()) {
+    created++;
+    return Promise.resolve({ worker: null, onProgress: null, phase: "reading" });
+  }
+  return new Promise((resolve) => waiting.push(resolve));
+}
+
+function release(slot: Slot): void {
+  slot.onProgress = null;
+  const next = waiting.shift();
+  if (next) next(slot);
+  else idle.push(slot);
+}
+
+// A slot's worker, created on first use and reused. Every asset is local
 // (see scripts/copy-vendor.mjs) — nothing is fetched at runtime.
-function getWorker() {
-  if (!workerPromise) {
+function workerOf(slot: Slot) {
+  if (!slot.worker) {
     // English + Romanian: ID cards carry diacritics and Romanian field labels
     // that the English model alone misreads. Both .traineddata files are local.
-    workerPromise = createWorker("eng+ron", 1, {
+    slot.worker = createWorker("eng+ron", 1, {
       workerPath: "/vendor/tesseract/worker.min.js",
       corePath: "/vendor/tesseract/core",
       langPath: "/vendor/tesseract/lang",
@@ -61,16 +81,16 @@ function getWorker() {
       workerBlobURL: false,
       gzip: false,
       logger: (m) => {
-        if (m.status === "recognizing text") onProgress?.(phase, m.progress);
+        if (m.status === "recognizing text") slot.onProgress?.(slot.phase, m.progress);
       },
     }).catch((err) => {
       // Don't cache a rejected init. A transient failure (a missing asset, low
       // memory) would otherwise kill OCR until restart; reset so the next call retries.
-      workerPromise = null;
+      slot.worker = null;
       throw err;
     });
   }
-  return workerPromise;
+  return slot.worker;
 }
 
 // How many confident runs of 4+ letters a word holds. Rotated or upside-down
@@ -95,6 +115,7 @@ interface Scored extends OcrResult {
 // `enhance` (the default) the source is contrast-stretched and upscaled first;
 // the orientation search skips it, since it only needs a relative word count.
 async function recognize(
+  slot: Slot,
   source: HTMLImageElement | HTMLCanvasElement,
   enhance = true,
   look: OcrLook = "first",
@@ -103,7 +124,7 @@ async function recognize(
   const input = prepared ? prepared.canvas : source;
   const scale = prepared ? prepared.scale : 1;
 
-  const worker = await getWorker();
+  const worker = await workerOf(slot);
   const { data } = await worker.recognize(input, {}, { blocks: true, text: true });
 
   const words: OcrWord[] = [];
@@ -140,15 +161,14 @@ async function recognize(
 
 /** OCR an image at its current orientation. */
 export async function ocr(image: HTMLImageElement, progress?: ProgressFn): Promise<OcrResult> {
-  const release = await acquire();
-  onProgress = progress ?? null;
-  phase = "reading";
+  const slot = await acquire();
+  slot.onProgress = progress ?? null;
+  slot.phase = "reading";
   try {
-    const { text, words } = await recognize(image);
+    const { text, words } = await recognize(slot, image);
     return { text, words };
   } finally {
-    onProgress = null;
-    release();
+    release(slot);
   }
 }
 
@@ -161,15 +181,14 @@ export async function ocrSecondLook(
   image: HTMLImageElement,
   progress?: ProgressFn,
 ): Promise<OcrResult> {
-  const release = await acquire();
-  onProgress = progress ?? null;
-  phase = "reading";
+  const slot = await acquire();
+  slot.onProgress = progress ?? null;
+  slot.phase = "reading";
   try {
-    const { text, words } = await recognize(image, true, "second");
+    const { text, words } = await recognize(slot, image, true, "second");
     return { text, words };
   } finally {
-    onProgress = null;
-    release();
+    release(slot);
   }
 }
 
@@ -203,33 +222,32 @@ export async function ocrAutoOrient(
   image: HTMLImageElement,
   progress?: ProgressFn,
 ): Promise<OrientedOcr> {
-  const release = await acquire();
-  onProgress = progress ?? null;
+  const slot = await acquire();
+  slot.onProgress = progress ?? null;
   try {
-    phase = "reading";
-    const first = await recognize(image);
+    slot.phase = "reading";
+    const first = await recognize(slot, image);
     if (first.score >= CLEARLY_UPRIGHT) {
       return { text: first.text, words: first.words, quarterTurns: 0 };
     }
 
     // Not clearly upright — it may be sideways. Score all four orientations on a
     // downscaled copy (a like-for-like comparison) and keep whichever reads best.
-    phase = "orienting";
+    slot.phase = "orienting";
     const scores: number[] = [];
     for (const turns of [0, 1, 2, 3]) {
-      onProgress?.("orienting", turns / 4);
-      scores.push((await recognize(orientedCanvas(image, turns, SEARCH_MAX_DIM), false)).score);
+      slot.onProgress?.("orienting", turns / 4);
+      scores.push((await recognize(slot, orientedCanvas(image, turns, SEARCH_MAX_DIM), false)).score);
     }
     const bestTurns = pickOrientation(scores);
 
     if (bestTurns === 0) {
       return { text: first.text, words: first.words, quarterTurns: 0 };
     }
-    phase = "reading";
-    const best = await recognize(orientedCanvas(image, bestTurns));
+    slot.phase = "reading";
+    const best = await recognize(slot, orientedCanvas(image, bestTurns));
     return { text: best.text, words: best.words, quarterTurns: bestTurns };
   } finally {
-    onProgress = null;
-    release();
+    release(slot);
   }
 }
