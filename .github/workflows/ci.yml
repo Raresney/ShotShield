@@ -26,3 +26,30 @@ jobs:
       # needed for this).
       - run: npm test -w desktop
       - run: npm run build -w desktop
+
+  # The real flows in a browser: OCR, PDF, saving, settings. Slower, so it runs
+  # beside the unit job rather than inside it.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+        working-directory: desktop
+      - run: npm run e2e -w desktop
+        env:
+          CI: "1"
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            desktop/playwright-report
+            desktop/test-results
+          retention-days: 7

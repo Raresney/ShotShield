@@ -67,3 +67,7 @@ desktop.ini
 *.log
 /tmp/
 /.cache/
+
+# ───── Playwright (desktop e2e) ─────
+/desktop/test-results/
+/desktop/playwright-report/

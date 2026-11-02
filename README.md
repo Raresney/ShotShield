@@ -91,7 +91,7 @@ npm install
 npm run tauri dev
 ```
 
-That compiles the core, starts Vite and opens the window. `npm run tauri build` produces a release binary, and `npm test -w core` runs the engine's tests.
+That compiles the core, starts Vite and opens the window. `npm run tauri build` produces a release binary, `npm test -w core` runs the engine's tests, `npm test -w desktop` the front end's unit tests, and `npm run e2e -w desktop` drives the built app through its main flows in a headless browser (run `npx playwright install chromium` once first).
 
 ## Status
 
