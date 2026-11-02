@@ -59,8 +59,9 @@ const D = "[-– ]";
 // Follow-on pieces of a key body that OCR split at a space. A piece must be
 // 4+ key chars and carry a digit, so ordinary words after a key ("…dc is the
 // live key") never get glued on. `/` is in the class because OCR reads a 7 as
-// one. Seen live: "4eC39HqLyjWDarjtT 1zdp7dc" — a 7-char tail left exposed.
-const TAIL = "(?: (?=[A-Za-z_/-]{0,40}\\d)[A-Za-z0-9_/-]{4,})*";
+// one, and `@` because a slashed monospace zero can come back as one. Seen
+// live: "4eC39HqLyjWDarjtT 1zdp7dc" — a 7-char tail left exposed.
+const TAIL = "(?: (?=[A-Za-z_/-]{0,40}\\d)[A-Za-z0-9_/@-]{4,})*";
 
 const PLACEHOLDERS = new Set([
   "password", "passwd", "pass", "secret", "token", "apikey", "api_key", "changeme",
@@ -113,6 +114,17 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     baseConfidence: 0.9 },
   { category: "api_key", label: "GitHub token", severity: "critical",
     source: `gh[pousr]${U}[A-Za-z0-9]{36}`, baseConfidence: 0.99 },
+  // The same token as OCR reads it off a monospace font: a slashed zero turned
+  // into @ and a kerning gap into a space. Taken when the body, once those are
+  // undone, is still 35-37 characters.
+  { category: "api_key", label: "GitHub token", severity: "critical",
+    source: `gh[pousr]${U}[A-Za-z0-9@]{12,}(?: [A-Za-z0-9@]{3,}){1,2}(?![A-Za-z0-9@])`,
+    baseConfidence: 0.9,
+    refine: (raw) => {
+      const body = raw.slice(4).replace(/ /g, "");
+      if (body.length < 35 || body.length > 37 || (body.match(/@/g) ?? []).length > 2) return false;
+      return {};
+    } },
   { category: "api_key", label: "GitHub token", severity: "critical",
     source: `github${U}pat${U}[A-Za-z0-9]{22}${U}[A-Za-z0-9]{59}`, baseConfidence: 0.99 },
   { category: "api_key", label: "GitLab token", severity: "critical",
@@ -215,12 +227,20 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // A monospace O often reads as 0 (RO49 -> R049), so the country code's second
   // letter may come back as 0/1; mod-97 decides whether the O/I reading holds.
   { category: "iban", label: "IBAN", severity: "high",
-    source: "(?<![0-9A-Za-z<])[A-Z][A-Z01]\\d{2}(?:[ ]?[A-Z0-9]){11,30}", baseConfidence: 0.7,
+    // A slashed zero can also come out doubled as "0O" (RO49 -> R0O49), so one
+    // stray O/0 after the country code is tolerated and dropped on the retry.
+    source: "(?<![0-9A-Za-z<])[A-Z][A-Z01][O0]?\\d{2}(?:[ ]?[A-Z0-9]){11,30}", baseConfidence: 0.7,
     refine: (raw) => {
       const s = raw.replace(/\s/g, "");
       if (ibanValid(s)) return { confidence: 0.98 };
-      const fixed = s[0] + (s[1] === "0" ? "O" : s[1] === "1" ? "I" : s[1]!) + s.slice(2);
-      return fixed !== s && ibanValid(fixed) ? { confidence: 0.95 } : false;
+      const country = s[0]! + (s[1] === "0" ? "O" : s[1] === "1" ? "I" : s[1]!);
+      const rests = [s.slice(2)];
+      if (/^[O0]\d\d/.test(s.slice(2))) rests.push(s.slice(3));
+      for (const rest of rests) {
+        const fixed = country + rest;
+        if (fixed !== s && ibanValid(fixed)) return { confidence: 0.95 };
+      }
+      return false;
     } },
 
   // ── SWIFT/BIC ───────────────────────────────────────────────────────────────
