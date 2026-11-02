@@ -19,6 +19,9 @@ jobs:
         include:
           - platform: windows-latest
           - platform: ubuntu-22.04
+          # One universal build covers Apple Silicon and Intel Macs.
+          - platform: macos-latest
+            args: --target universal-apple-darwin
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
@@ -43,6 +46,8 @@ jobs:
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: swatinem/rust-cache@v2
         with:
@@ -67,3 +72,4 @@ jobs:
           releaseName: ShotShield ${{ github.ref_name }}
           releaseDraft: false
           prerelease: false
+          args: ${{ matrix.args }}

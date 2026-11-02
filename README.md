@@ -82,7 +82,7 @@ It's an npm workspace with two halves.
 
 ## Install
 
-Grab the latest build for your platform from the [releases page](https://github.com/Raresney/ShotShield/releases/latest). Windows ships an `.exe` and an `.msi`; Linux ships an AppImage, a `.deb` and an `.rpm`. Run it and you're set. The build isn't code-signed yet, so Windows SmartScreen may warn you on first launch. Click "More info" then "Run anyway". The app checks for updates on its own and can install them in place.
+Grab the latest build for your platform from the [releases page](https://github.com/Raresney/ShotShield/releases/latest). Windows ships an `.exe` and an `.msi`; Linux ships an AppImage, a `.deb` and an `.rpm`; macOS ships one universal `.dmg` for Apple Silicon and Intel. Run it and you're set. The builds aren't signed with a paid certificate yet, so Windows SmartScreen may warn you on first launch (click "More info" then "Run anyway"), and macOS asks once before opening it (right-click the app, choose Open, then Open again). Screen capture, the tray and start-at-login are Windows-only for now. The app checks for updates on its own and can install them in place.
 
 ## Build from source
 
