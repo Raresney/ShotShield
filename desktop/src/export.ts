@@ -10,23 +10,45 @@ export type SaveResult = "saved" | "cancelled" | "downloaded";
 
 const inTauri = (): boolean => "__TAURI_INTERNALS__" in window;
 
-export function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+export function canvasBlob(canvas: HTMLCanvasElement, type = "image/png", quality?: number): Promise<Blob> {
   return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Canvas is empty"))), "image/png"),
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Canvas is empty"))), type, quality),
   );
 }
 
 export async function saveCanvas(canvas: HTMLCanvasElement, filename: string): Promise<SaveResult> {
-  const blob = await canvasBlob(canvas);
+  return saveBlob(await canvasBlob(canvas), filename, { name: "PNG image", extensions: ["png"] });
+}
+
+/**
+ * Save redacted PDF pages back into one PDF. Each page is the flattened,
+ * already-covered image, so the original's text layer never comes along.
+ */
+export async function savePdf(
+  pages: { canvas: HTMLCanvasElement; ptPerPx: number }[],
+  filename: string,
+): Promise<SaveResult> {
+  const { buildPdf } = await import("./pdfwrite.ts");
+  const images = await Promise.all(
+    pages.map(async ({ canvas, ptPerPx }) => ({
+      jpeg: new Uint8Array(await (await canvasBlob(canvas, "image/jpeg", 0.92)).arrayBuffer()),
+      width: canvas.width,
+      height: canvas.height,
+      widthPt: canvas.width * ptPerPx,
+      heightPt: canvas.height * ptPerPx,
+    })),
+  );
+  const blob = new Blob([buildPdf(images) as BlobPart], { type: "application/pdf" });
+  return saveBlob(blob, filename, { name: "PDF document", extensions: ["pdf"] });
+}
+
+async function saveBlob(blob: Blob, filename: string, filter: { name: string; extensions: string[] }): Promise<SaveResult> {
   if (!inTauri()) {
     download(blob, filename);
     return "downloaded";
   }
   const { save } = await import("@tauri-apps/plugin-dialog");
-  const path = await save({
-    defaultPath: filename,
-    filters: [{ name: "PNG image", extensions: ["png"] }],
-  });
+  const path = await save({ defaultPath: filename, filters: [filter] });
   if (!path) return "cancelled";
   const { writeFile } = await import("@tauri-apps/plugin-fs");
   await writeFile(path, new Uint8Array(await blob.arrayBuffer()));
@@ -82,10 +104,10 @@ function download(blob: Blob, filename: string): void {
 }
 
 /** A filename that says what it is: the source name plus "-redacted". */
-export function redactedName(source: string | null): string {
+export function redactedName(source: string | null, ext = "png"): string {
   const base = (source ?? "")
     .replace(/\.[^.]+$/, "")
     .replace(/[^\w.-]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `${base && base !== "clipboard" ? base : "screenshot"}-redacted.png`;
+  return `${base && base !== "clipboard" ? base : "screenshot"}-redacted.${ext}`;
 }

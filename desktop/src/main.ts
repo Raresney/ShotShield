@@ -7,7 +7,7 @@ import { ocr, ocrAutoOrient, ocrSecondLook, type Box, type OcrWord, type Progres
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
 import { locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, boxGripAt, dragBox, SEVERITY_RANK, type BoxGrip, type Region } from "./redact.ts";
-import { canvasBlob, redactedName, saveAll, saveCanvas } from "./export.ts";
+import { canvasBlob, redactedName, saveAll, saveCanvas, savePdf } from "./export.ts";
 import { loadSettings, renderSettings, scanConfig } from "./settings.ts";
 import { checkForUpdate, type PendingUpdate } from "./update.ts";
 import { isPdf, MAX_PDF_PAGES, PdfError, pdfPages } from "./pdf.ts";
@@ -24,6 +24,8 @@ const copyBtn = $<HTMLButtonElement>("#copyClipboard");
 const copyLabel = copyBtn.querySelector("span")!;
 const exportAllBtn = $<HTMLButtonElement>("#exportAll");
 const exportAllLabel = exportAllBtn.querySelector("span")!;
+const exportPdfBtn = $<HTMLButtonElement>("#exportPdf");
+const exportPdfLabel = exportPdfBtn.querySelector("span")!;
 const filmstrip = $<HTMLDivElement>("#filmstrip");
 const rotateBtn = $<HTMLButtonElement>("#rotate");
 const compareBtn = $<HTMLButtonElement>("#compare");
@@ -136,6 +138,7 @@ function setMode(m: Mode): void {
   copyBtn.title = m === "text" ? "Copy the text with every finding replaced" : "Copy the redacted image";
   copyBtn.disabled = m === "text" ? !input.value.trim() : cur?.status !== "done";
   exportAllBtn.hidden = m === "text" || docs.length < 2;
+  exportPdfBtn.hidden = m === "text" || !cur?.pdf;
   workspaceMeta.hidden = m === "text";
   sevFilter = null;
   if (m === "text") {
@@ -359,12 +362,15 @@ interface Doc {
   token: number;
   progress: { fraction: number | null; label: string };
   error?: string;
+  /** Set when the image is a page of an opened PDF, so it can be saved back as one. */
+  pdf?: { group: number; file: string; page: number; ptPerPx: number };
   thumb: string;
 }
 
 let docs: Doc[] = [];
 let cur: Doc | null = null;
 let nextDocId = 1;
+let nextPdfGroup = 1;
 
 const regionsNow = (): Region[] => cur?.regions ?? [];
 const manualNow = (): Box[] => cur?.manual ?? [];
@@ -585,6 +591,20 @@ function updateExportState(): void {
   exportAllLabel.textContent =
     done === docs.length ? `Save all ${docs.length}` : `Save all · ${done}/${docs.length} ready`;
   exportAllBtn.disabled = done !== docs.length;
+  const pages = pdfGroup(cur);
+  exportPdfBtn.hidden = mode === "text" || pages.length === 0;
+  const pagesDone = pages.filter((d) => d.status === "done").length;
+  const noun = pages.length === 1 ? "page" : "pages";
+  exportPdfLabel.textContent =
+    pagesDone === pages.length ? `Save as PDF · ${pages.length} ${noun}` : `Save as PDF · ${pagesDone}/${pages.length} ready`;
+  exportPdfBtn.disabled = pagesDone !== pages.length;
+}
+
+// The open pages that came from the same PDF as `doc`, in page order.
+function pdfGroup(doc: Doc | null): Doc[] {
+  const group = doc?.pdf?.group;
+  if (group === undefined) return [];
+  return docs.filter((d) => d.pdf?.group === group).sort((a, b) => a.pdf!.page - b.pdf!.page);
 }
 
 // Images and PDFs both land here; a PDF opens as one image per page.
@@ -594,7 +614,7 @@ async function addImages(files: File[]): Promise<void> {
   if (mode !== "image") setMode("image");
   let first: Doc | null = null;
   let problem: string | null = null;
-  const add = async (name: string, dataUrl: string): Promise<void> => {
+  const add = async (name: string, dataUrl: string, pdf?: Doc["pdf"]): Promise<void> => {
     let shown: HTMLImageElement;
     try {
       shown = await fitToWorkingSize(await loadImageEl(dataUrl));
@@ -618,6 +638,7 @@ async function addImages(files: File[]): Promise<void> {
       token: 0,
       progress: { fraction: null, label: "Waiting in line" },
       thumb: thumbOf(shown),
+      pdf,
     };
     docs.push(doc);
     first ??= doc;
@@ -631,9 +652,10 @@ async function addImages(files: File[]): Promise<void> {
       await add(file.name, await readAsDataURL(file).catch(() => ""));
       continue;
     }
+    const group = nextPdfGroup++;
     try {
       for await (const page of pdfPages(file, MAX_WORKING_DIM)) {
-        await add(page.name, page.dataUrl);
+        await add(page.name, page.dataUrl, { group, file: file.name, page: page.page, ptPerPx: page.ptPerPx });
         if (page.page === MAX_PDF_PAGES && page.pages > MAX_PDF_PAGES) {
           problem = `Opened the first ${MAX_PDF_PAGES} of ${page.pages} pages.`;
         }
@@ -1297,6 +1319,21 @@ exportAllBtn.addEventListener("click", async () => {
   }
 });
 
+exportPdfBtn.addEventListener("click", async () => {
+  const pages = pdfGroup(cur);
+  if (exportPdfBtn.disabled || pages.length === 0) return;
+  try {
+    const result = await savePdf(
+      pages.map((d) => ({ canvas: renderDoc(d), ptPerPx: d.pdf!.ptPerPx })),
+      redactedName(pages[0]!.pdf!.file, "pdf"),
+    );
+    if (result !== "cancelled") flash(exportPdfBtn, "Saved");
+  } catch (err) {
+    console.error("PDF save failed", err);
+    flash(exportPdfBtn, "Save failed");
+  }
+});
+
 // Briefly swap a button's label to confirm an action, then restore it. Only the
 // label span changes, so the button's icon survives.
 function flash(btn: HTMLButtonElement, msg: string): void {
@@ -1307,7 +1344,7 @@ function flash(btn: HTMLButtonElement, msg: string): void {
   setTimeout(() => {
     label.textContent = original;
     btn.disabled = false;
-    if (btn === exportAllBtn || btn === exportBtn) updateExportState();
+    if (btn === exportAllBtn || btn === exportBtn || btn === exportPdfBtn) updateExportState();
   }, 1300);
 }
 
