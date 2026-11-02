@@ -16,6 +16,8 @@ export interface PdfPage {
   /** 1-based page number and how many pages the PDF has in total. */
   page: number;
   pages: number;
+  /** PDF points per rendered pixel, to save the page back at its original size. */
+  ptPerPx: number;
 }
 
 export class PdfError extends Error {
@@ -67,13 +69,14 @@ export async function* pdfPages(file: File, maxDim: number): AsyncGenerator<PdfP
     for (let n = 1; n <= Math.min(pages, MAX_PDF_PAGES); n++) {
       const page = await doc.getPage(n);
       const base = page.getViewport({ scale: 1 });
-      const viewport = page.getViewport({ scale: pageScale(base.width, base.height, maxDim) });
+      const scale = pageScale(base.width, base.height, maxDim);
+      const viewport = page.getViewport({ scale });
       const canvas = document.createElement("canvas");
       canvas.width = Math.round(viewport.width);
       canvas.height = Math.round(viewport.height);
       // White behind the page: a transparent PDF would otherwise OCR as black.
       await page.render({ canvas, viewport, background: "#ffffff" }).promise;
-      yield { name: pageName(file.name, n, pages), dataUrl: canvas.toDataURL("image/png"), page: n, pages };
+      yield { name: pageName(file.name, n, pages), dataUrl: canvas.toDataURL("image/png"), page: n, pages, ptPerPx: 1 / scale };
       page.cleanup();
     }
   } finally {

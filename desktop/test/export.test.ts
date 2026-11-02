@@ -6,6 +6,10 @@ describe("redactedName", () => {
     expect(redactedName("Screenshot 2026-10-23 at 14.02.png")).toBe("Screenshot-2026-10-23-at-14.02-redacted.png");
   });
 
+  it("takes another extension for a redacted PDF", () => {
+    expect(redactedName("bank statement.pdf", "pdf")).toBe("bank-statement-redacted.pdf");
+  });
+
   it("falls back to a generic name for clipboard images", () => {
     expect(redactedName("clipboard")).toBe("screenshot-redacted.png");
     expect(redactedName(null)).toBe("screenshot-redacted.png");
