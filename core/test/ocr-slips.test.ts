@@ -35,3 +35,17 @@ test("a database URL with only host and port is not a credential", () => {
     assert.deepEqual(scan(t), [], t);
   }
 });
+
+test("a GitHub token split by a space, with a slashed zero read as @", () => {
+  const d = scan("GITHUB_TOKEN=ghp_" + "R7nQ2mK9xV4bT6wL1pZ8cJ3hF 5dS@aE2yU7i");
+  assert.equal(d.length, 1);
+  assert.equal(d[0]!.label, "GitHub token");
+  assert.ok(d[0]!.text.endsWith("5dS@aE2yU7i"), "the piece after the gap is covered too");
+  // Too short once the gaps are closed: not a token.
+  assert.deepEqual(labels("ghp_" + "abcdefghijklmnop qrs"), []);
+});
+
+test("an IBAN whose country code came back as R0O", () => {
+  assert.deepEqual(labels("PAYOUT_IBAN=R0O49AAAA1B31007593840000"), ["IBAN"]);
+  assert.ok(!labels("R0O49AAAA1B31007593840001").includes("IBAN"), "checksum still decides");
+});
