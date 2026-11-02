@@ -60,4 +60,10 @@ export interface ScanConfig {
   customRules?: CustomRule[];
   /** Drop detections below this confidence. Default: 0. */
   minConfidence?: number;
+  /**
+   * Values that are never reported, like your own work email or a lab IP.
+   * Matched against the whole detection, ignoring case and spaces; `*` stands
+   * for any run of characters, so "*@acme.com" lets every ACME address through.
+   */
+  allow?: string[];
 }

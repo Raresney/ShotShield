@@ -3,7 +3,7 @@
 // this module owns the UI for it and persists the choices in localStorage so
 // they survive a restart.
 
-import type { Category, ScanConfig } from "@shotshield/core";
+import type { Category, CustomRule, ScanConfig } from "@shotshield/core";
 import type { CoverStyle } from "./redact.ts";
 
 // The categories the user can switch, grouped the way people think about them.
@@ -63,6 +63,18 @@ export interface Settings {
   tray: boolean;
   /** Put a capture on the clipboard as soon as it's covered (Windows). */
   copyCaptures: boolean;
+  /** Values never covered, one glob each ("*" = anything). */
+  allow: string[];
+  /** The user's own things to cover, on top of the built-in detectors. */
+  rules: UserRule[];
+}
+
+export interface UserRule {
+  id: string;
+  label: string;
+  pattern: string;
+  /** A regular expression; otherwise the pattern is plain text. */
+  regex: boolean;
 }
 
 const STORAGE_KEY = "shotshield.settings";
@@ -70,7 +82,7 @@ const STORAGE_KEY = "shotshield.settings";
 function defaults(): Settings {
   const enabled: Partial<Record<Category, boolean>> = {};
   for (const g of GROUPS) for (const { cat } of g.items) if (cat !== "face") enabled[cat] = true;
-  return { enabled, faces: true, minConfidence: 0, cover: "solid", tray: true, copyCaptures: false };
+  return { enabled, faces: true, minConfidence: 0, cover: "solid", tray: true, copyCaptures: false, allow: [], rules: [] };
 }
 
 // Merge whatever was saved over the defaults, so a category added in a later
@@ -89,10 +101,21 @@ export function loadSettings(): Settings {
       cover: saved.cover === "mosaic" ? "mosaic" : "solid",
       tray: saved.tray ?? base.tray,
       copyCaptures: saved.copyCaptures ?? base.copyCaptures,
+      allow: Array.isArray(saved.allow) ? saved.allow.filter((a) => typeof a === "string") : base.allow,
+      rules: Array.isArray(saved.rules) ? saved.rules.filter(isRule) : base.rules,
     };
   } catch {
     return base; // unavailable or corrupt storage: fall back to defaults
   }
+}
+
+function isRule(r: unknown): r is UserRule {
+  const x = r as UserRule;
+  return !!x && typeof x.id === "string" && typeof x.label === "string" && typeof x.pattern === "string";
+}
+
+export function saveSettings(s: Settings): void {
+  save(s);
 }
 
 function save(s: Settings): void {
@@ -105,7 +128,29 @@ function save(s: Settings): void {
 }
 
 export function scanConfig(s: Settings): ScanConfig {
-  return { enabled: s.enabled, minConfidence: s.minConfidence };
+  return { enabled: s.enabled, minConfidence: s.minConfidence, allow: s.allow, customRules: customRules(s.rules) };
+}
+
+// Plain-text rules are escaped into a pattern; both kinds ignore case. Empty
+// and invalid ones are left out (the panel flags the invalid ones).
+export function customRules(rules: UserRule[]): CustomRule[] {
+  return rules
+    .filter((r) => r.pattern.trim() && (!r.regex || validRegex(r.pattern)))
+    .map((r) => ({
+      id: r.id,
+      label: r.label.trim() || "Your rule",
+      pattern: r.regex ? r.pattern : r.pattern.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+      flags: "i",
+    }));
+}
+
+export function validRegex(pattern: string): boolean {
+  try {
+    new RegExp(pattern);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** What the Background section needs from the app shell (Windows only). */
@@ -154,7 +199,117 @@ export function renderSettings(
   sens.append(note, slider(s, commit));
   body.append(sens);
 
+  body.append(allowGroup(s, commit), rulesGroup(s, commit));
+
   if (background) body.append(backgroundGroup(s, commit, background));
+}
+
+// One value per line. Written back on every keystroke (debounced), so the
+// findings update while you type.
+function allowGroup(s: Settings, commit: () => void): HTMLElement {
+  const section = group("Never cover");
+  const note = document.createElement("p");
+  note.className = "set-note";
+  note.textContent = "One value per line, * for any part (*@yourcompany.com). Right-click a finding to add it.";
+  const area = document.createElement("textarea");
+  area.className = "set-textarea";
+  area.rows = 3;
+  area.spellcheck = false;
+  area.placeholder = "you@yourcompany.com";
+  area.setAttribute("aria-label", "Values never covered");
+  area.value = s.allow.join("\n");
+  let timer = 0;
+  area.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(() => {
+      s.allow = area.value.split("\n").map((l) => l.trim()).filter(Boolean);
+      commit();
+    }, 300);
+  });
+  section.append(note, area);
+  return section;
+}
+
+function rulesGroup(s: Settings, commit: () => void): HTMLElement {
+  const section = group("Also cover");
+  const note = document.createElement("p");
+  note.className = "set-note";
+  note.textContent = "Things only you know are sensitive: a project code name, an internal ID format.";
+  const list = document.createElement("div");
+  list.className = "rule-list";
+  let timer = 0;
+  const later = () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(commit, 300);
+  };
+
+  const row = (rule: UserRule): HTMLElement => {
+    const el = document.createElement("div");
+    el.className = "rule-row";
+    const label = document.createElement("input");
+    label.className = "rule-label";
+    label.placeholder = "Name";
+    label.value = rule.label;
+    label.setAttribute("aria-label", "Rule name");
+    const pattern = document.createElement("input");
+    pattern.className = "rule-pattern";
+    pattern.value = rule.pattern;
+    pattern.spellcheck = false;
+    pattern.setAttribute("aria-label", "Text or pattern to cover");
+    const kind = document.createElement("button");
+    kind.type = "button";
+    kind.className = "rule-kind";
+    kind.title = "Plain text or regular expression";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "rule-remove";
+    remove.title = "Remove rule";
+    remove.setAttribute("aria-label", "Remove rule");
+    remove.innerHTML = `<svg class="icon"><use href="#i-x"></use></svg>`;
+    const sync = () => {
+      kind.textContent = rule.regex ? ".*" : "Aa";
+      pattern.placeholder = rule.regex ? "PRJ-\\d{4}" : "Project Falcon";
+      kind.setAttribute("aria-pressed", String(rule.regex));
+      pattern.setAttribute("aria-invalid", String(rule.regex && !validRegex(rule.pattern)));
+    };
+    sync();
+    label.addEventListener("input", () => {
+      rule.label = label.value;
+      later();
+    });
+    pattern.addEventListener("input", () => {
+      rule.pattern = pattern.value;
+      sync();
+      later();
+    });
+    kind.addEventListener("click", () => {
+      rule.regex = !rule.regex;
+      sync();
+      commit();
+    });
+    remove.addEventListener("click", () => {
+      s.rules = s.rules.filter((r) => r !== rule);
+      el.remove();
+      commit();
+    });
+    el.append(label, pattern, kind, remove);
+    return el;
+  };
+
+  list.append(...s.rules.map(row));
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "btn rule-add";
+  add.innerHTML = `<svg class="icon"><use href="#i-plus"></use></svg><span>Add rule</span>`;
+  add.addEventListener("click", () => {
+    const rule: UserRule = { id: `rule-${Date.now().toString(36)}`, label: "", pattern: "", regex: false };
+    s.rules.push(rule);
+    const el = row(rule);
+    list.append(el);
+    el.querySelector<HTMLInputElement>(".rule-label")?.focus();
+  });
+  section.append(note, list, add);
+  return section;
 }
 
 function backgroundGroup(s: Settings, commit: () => void, hooks: BackgroundHooks): HTMLElement {
