@@ -438,3 +438,21 @@ test("does not flag a bare number without the RO/CUI anchor", () => {
 test("can disable the tax_id category", () => {
   assert.deepEqual(scan("CUI 13548146", { enabled: { tax_id: false } }), []);
 });
+
+test("the allow list lets chosen values through, ignoring case and spaces", () => {
+  const text = "Mail ana@acme.com or bob@gmail.com, server 8.8.8.8";
+  const dets = scan(text, { allow: ["ANA@ACME.COM", "8.8. 8.8"] });
+  assert.deepEqual(dets.map((d) => d.text), ["bob@gmail.com"]);
+});
+
+test("an allow entry with * covers a whole family of values", () => {
+  const dets = scan("ana@acme.com bob@acme.com eve@evil.com", { allow: ["*@acme.com"] });
+  assert.deepEqual(dets.map((d) => d.text), ["eve@evil.com"]);
+});
+
+test("allow entries are literal apart from *, and a bare * allows nothing", () => {
+  // "." must not act as a regex wildcard: "ana@acmeXcom" doesn't allow "ana@acme.com".
+  assert.equal(scan("ana@acme.com", { allow: ["ana@acmeXcom"] }).length, 1);
+  // A lone star would hide everything; it's ignored instead.
+  assert.equal(scan("ana@acme.com", { allow: ["*", "**"] }).length, 1);
+});

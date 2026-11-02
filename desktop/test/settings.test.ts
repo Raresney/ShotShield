@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { loadSettings, scanConfig } from "../src/settings.ts";
+import { customRules, loadSettings, scanConfig } from "../src/settings.ts";
+import { scan } from "@shotshield/core";
 
 beforeEach(() => localStorage.clear());
 
@@ -32,6 +33,12 @@ describe("loadSettings", () => {
     expect(loadSettings().cover).toBe("solid");
   });
 
+  it("keeps the tray on and capture copying off unless saved otherwise", () => {
+    expect(loadSettings()).toMatchObject({ tray: true, copyCaptures: false });
+    localStorage.setItem("shotshield.settings", JSON.stringify({ tray: false, copyCaptures: true }));
+    expect(loadSettings()).toMatchObject({ tray: false, copyCaptures: true });
+  });
+
   it("falls back to defaults on corrupt storage", () => {
     localStorage.setItem("shotshield.settings", "{ not json");
     const s = loadSettings();
@@ -42,8 +49,43 @@ describe("loadSettings", () => {
 
 describe("scanConfig", () => {
   it("forwards the enabled map and confidence floor to the scanner", () => {
-    const cfg = scanConfig({ enabled: { email: false }, faces: true, minConfidence: 0.3, cover: "solid" });
+    const cfg = scanConfig({ ...loadSettings(), enabled: { email: false }, minConfidence: 0.3 });
     expect(cfg.enabled?.email).toBe(false);
     expect(cfg.minConfidence).toBe(0.3);
+  });
+});
+
+describe("user rules", () => {
+  it("escapes plain-text rules and keeps regex ones, both ignoring case", () => {
+    const rules = customRules([
+      { id: "a", label: "Code name", pattern: "Project (Falcon)", regex: false },
+      { id: "b", label: "", pattern: String.raw`PRJ-\d{4}`, regex: true },
+    ]);
+    expect(rules).toEqual([
+      { id: "a", label: "Code name", pattern: String.raw`Project \(Falcon\)`, flags: "i" },
+      { id: "b", label: "Your rule", pattern: String.raw`PRJ-\d{4}`, flags: "i" },
+    ]);
+  });
+
+  it("leaves out empty and invalid rules", () => {
+    expect(customRules([
+      { id: "a", label: "x", pattern: "  ", regex: false },
+      { id: "b", label: "y", pattern: "([", regex: true },
+    ])).toEqual([]);
+  });
+
+  it("feeds the allow list and rules into the scan", () => {
+    const s = loadSettings();
+    s.allow = ["*@acme.com"];
+    s.rules = [{ id: "r", label: "Code name", pattern: "falcon", regex: false }];
+    const dets = scan("Mail ana@acme.com about Project FALCON, cc eve@evil.com", scanConfig(s));
+    expect(dets.map((d) => d.text)).toEqual(["FALCON", "eve@evil.com"]);
+  });
+
+  it("drops malformed saved rules", () => {
+    localStorage.setItem("shotshield.settings", JSON.stringify({ allow: ["ok", 3], rules: [{ id: 1 }, { id: "r", label: "", pattern: "x", regex: false }] }));
+    const s = loadSettings();
+    expect(s.allow).toEqual(["ok"]);
+    expect(s.rules).toHaveLength(1);
   });
 });

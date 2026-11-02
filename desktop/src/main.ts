@@ -8,7 +8,7 @@ import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
 import { locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, boxGripAt, dragBox, SEVERITY_RANK, type BoxGrip, type Region } from "./redact.ts";
 import { canvasBlob, redactedName, saveAll, saveCanvas, savePdf } from "./export.ts";
-import { loadSettings, renderSettings, scanConfig } from "./settings.ts";
+import { loadSettings, renderSettings, saveSettings, scanConfig, type BackgroundHooks } from "./settings.ts";
 import { checkForUpdate, type PendingUpdate } from "./update.ts";
 import { isPdf, MAX_PDF_PAGES, PdfError, pdfPages } from "./pdf.ts";
 
@@ -316,6 +316,7 @@ function scanText(): void {
         tag: "div",
       });
       row.classList.add("hit-static");
+      row.addEventListener("contextmenu", (e) => offerAllow(e, d.text));
       return row;
     }),
   );
@@ -332,6 +333,52 @@ function onSettingsChange(): void {
   recomputeRegions();
 }
 renderSettings(settingsBody, settings, onSettingsChange);
+
+// Set once the Windows-only Background section is wired up, so re-rendering
+// the drawer keeps it.
+let backgroundHooks: BackgroundHooks | null = null;
+
+// Right-click a finding: "never cover this". The value joins the allow list
+// in settings, and every open scan drops it straight away.
+let allowMenu: HTMLElement | null = null;
+function closeAllowMenu(): void {
+  allowMenu?.remove();
+  allowMenu = null;
+}
+function offerAllow(e: MouseEvent, value: string): void {
+  e.preventDefault();
+  closeAllowMenu();
+  const menu = document.createElement("div");
+  menu.className = "allow-menu";
+  menu.setAttribute("role", "menu");
+  const item = document.createElement("button");
+  item.type = "button";
+  item.setAttribute("role", "menuitem");
+  item.textContent = `Never cover “${mask(value)}”`;
+  item.addEventListener("click", () => {
+    closeAllowMenu();
+    if (!settings.allow.includes(value)) settings.allow.push(value);
+    saveSettings(settings);
+    onSettingsChange();
+    renderSettings(settingsBody, settings, onSettingsChange, backgroundHooks ?? undefined);
+    notify("Added to Never cover. Edit the list in Detection settings.");
+  });
+  menu.append(item);
+  document.body.append(menu);
+  const { innerWidth, innerHeight } = window;
+  const r = menu.getBoundingClientRect();
+  menu.style.left = `${Math.min(e.clientX, innerWidth - r.width - 8)}px`;
+  menu.style.top = `${Math.min(e.clientY, innerHeight - r.height - 8)}px`;
+  allowMenu = menu;
+  item.focus();
+}
+window.addEventListener("pointerdown", (e) => {
+  if (allowMenu && !allowMenu.contains(e.target as Node)) closeAllowMenu();
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeAllowMenu();
+});
+window.addEventListener("blur", closeAllowMenu);
 
 // ── Image path ──
 // Every image the user brings in is a Doc: its own pixels, OCR cache, findings,
@@ -940,6 +987,7 @@ function regionRow(region: Region, index: number, position: number): HTMLElement
   });
   el.title = region.hidden ? "Click to uncover" : "Click to cover";
   el.addEventListener("click", () => toggle(index));
+  if (d.category !== "face") el.addEventListener("contextmenu", (e) => offerAllow(e, d.text));
   el.addEventListener("mouseenter", () => setHover(region.boxes));
   el.addEventListener("mouseleave", () => setHover(null));
   // Keyboard users get the same region outline when they tab onto the row.
@@ -1530,16 +1578,56 @@ if (canCapture) {
       try {
         const bytes = await invoke<ArrayBuffer>("capture_take");
         const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
-        await addImages([new File([bytes], `capture-${stamp}.png`, { type: "image/png" })]);
+        const name = `capture-${stamp}.png`;
+        await addImages([new File([bytes], name, { type: "image/png" })]);
+        if (settings.copyCaptures) void copyWhenCovered(name);
       } catch (err) {
         console.error("Couldn't receive the capture", err);
       }
     });
+
+    // Tray and start-at-login live in the Rust side; the window tells it what
+    // the settings say, then adds their switches to the drawer.
+    void invoke("set_background", { enabled: settings.tray });
+    const autostart = await invoke<boolean>("autostart_enabled").catch(() => false);
+    backgroundHooks = {
+      setTray: (on) => void invoke("set_background", { enabled: on }),
+      autostart,
+      setAutostart: async (on) => {
+        try {
+          await invoke("set_autostart", { enabled: on });
+        } catch (err) {
+          console.error("Couldn't change start at login", err);
+          notify("Couldn't change start with Windows.");
+        }
+      },
+    };
+    renderSettings(settingsBody, settings, onSettingsChange, backgroundHooks);
     await listen<string>("capture-failed", (e) => {
       console.error("Capture failed", e.payload);
       if (!cur) summary.textContent = `Couldn't capture the screen: ${e.payload}`;
     });
   })();
+}
+
+// The capture-to-chat shortcut: once the capture's scan is done, put the
+// covered image on the clipboard so it can be pasted straight away.
+async function copyWhenCovered(name: string): Promise<void> {
+  const doc = docs.find((d) => d.name === name);
+  if (!doc) return;
+  while (doc.status === "queued" || doc.status === "scanning") {
+    await new Promise((r) => setTimeout(r, 150));
+    if (!docs.includes(doc)) return;
+  }
+  if (doc.status !== "done") return;
+  try {
+    const blob = await canvasBlob(renderDoc(doc));
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    notify(`Copied the covered capture · ${doc.regions.length} ${doc.regions.length === 1 ? "finding" : "findings"} hidden`);
+  } catch (err) {
+    console.error("Clipboard copy failed", err);
+    notify("Couldn't copy the capture to the clipboard.");
+  }
 }
 
 // ── Updates ──

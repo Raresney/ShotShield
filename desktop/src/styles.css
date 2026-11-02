@@ -588,6 +588,42 @@ kbd {
 }
 .segmented .icon { width: 14px; height: 14px; }
 
+.set-textarea, .rule-row input {
+  width: 100%; padding: 7px 9px;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  font: 12.5px/1.45 var(--mono, "JetBrains Mono Variable", monospace);
+}
+.set-textarea { resize: vertical; min-height: 64px; }
+.set-textarea:focus, .rule-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.rule-list { display: flex; flex-direction: column; gap: 6px; }
+.rule-row { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto auto; gap: 6px; align-items: center; }
+.rule-row .rule-label { font-family: inherit; }
+.rule-row input[aria-invalid="true"] { border-color: var(--critical); }
+.rule-kind, .rule-remove {
+  height: 30px; min-width: 30px; padding: 0 6px;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface-2); color: var(--text-2); cursor: pointer;
+  font: 600 11.5px var(--mono, "JetBrains Mono Variable", monospace);
+}
+.rule-kind[aria-pressed="true"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.rule-remove { display: inline-grid; place-items: center; }
+.rule-remove:hover { color: var(--critical); }
+.rule-remove .icon { width: 13px; height: 13px; }
+.rule-add { margin-top: 8px; }
+
+.allow-menu {
+  position: fixed; z-index: 60; padding: 4px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.allow-menu button {
+  display: block; width: 100%; max-width: 320px; padding: 7px 10px;
+  border: 0; border-radius: 7px; background: transparent; color: var(--text);
+  text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.allow-menu button:hover, .allow-menu button:focus-visible { background: var(--surface-2); outline: none; }
+
 .settings-slider { display: block; padding: 4px 0; }
 .settings-slider-top { display: flex; justify-content: space-between; margin-bottom: 8px; }
 .settings-slider-value { font-weight: 650; font-variant-numeric: tabular-nums; color: var(--accent); }
