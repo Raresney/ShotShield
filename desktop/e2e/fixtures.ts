@@ -4,8 +4,12 @@ import type { Page } from "@playwright/test";
 export const EMAIL = "maria.popescu@example.com";
 export const IBAN = "RO49AAAA1B31007593840000";
 
-/** A small digital PDF, one page per entry, set in Helvetica (not embedded). */
-export function textPdf(pages: string[][]): Buffer {
+/**
+ * A small digital PDF, one page per entry, set in Helvetica (not embedded).
+ * `rotate` sets every page's /Rotate, as a scanner app does for a page fed in
+ * upside down.
+ */
+export function textPdf(pages: string[][], rotate = 0): Buffer {
   const objs: string[] = [];
   const add = (body: string): number => objs.push(body);
   const font = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
@@ -16,7 +20,7 @@ export function textPdf(pages: string[][]): Buffer {
     const content = add(`<< /Length ${ops.length} >>\nstream\n${ops}\nendstream`);
     kids.push(
       add(
-        `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Contents ${content} 0 R /Resources << /Font << /F1 ${font} 0 R >> >> >>`,
+        `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Rotate ${rotate} /Contents ${content} 0 R /Resources << /Font << /F1 ${font} 0 R >> >> >>`,
       ),
     );
   }

@@ -43,6 +43,17 @@ describe("textLayerToOcr", () => {
     expect(b.h).toBeCloseTo(40);
   });
 
+  it("boxes upside-down text where it is drawn", () => {
+    // A /Rotate 180 page: the run starts at x=300 and its glyphs go left, with
+    // their tops below the baseline.
+    const r = textLayerToOcr([{ str: "AB12", transform: [-20, 0, 0, 20, 300, 400], width: 40, hasEOL: true }], measure);
+    const b = r.words[0]!.box;
+    expect(b.x).toBeCloseTo(260);
+    expect(b.w).toBeCloseTo(40);
+    expect(b.y).toBeLessThanOrEqual(400 - 20 * 0.25);
+    expect(b.y + b.h).toBeGreaterThanOrEqual(400 + 20 * 0.85);
+  });
+
   it("returns nothing for an empty layer", () => {
     expect(textLayerToOcr([], measure)).toEqual({ text: "", words: [] });
   });
