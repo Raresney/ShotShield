@@ -44,6 +44,20 @@ test("an image is read, covered, toggled and saved", async ({ page }) => {
   expect([...bytes.subarray(1, 4)].map((b) => String.fromCharCode(b)).join("")).toBe("PNG");
 });
 
+test("a settings change keeps what was covered or uncovered by hand", async ({ page }) => {
+  const png = await screenshotPng(page, [`Email: ${EMAIL}`, `IBAN: ${IBAN}`]);
+  await page.locator("#file").setInputFiles({ name: "mixed.png", mimeType: "image/png", buffer: png });
+  await expect(page.locator("#summary")).toHaveText("2 of 2 covered", { timeout: 80_000 });
+
+  await page.locator("#results .hit", { hasText: "IBAN" }).click();
+  await expect(page.locator("#summary")).toHaveText("1 of 2 covered");
+
+  await page.locator("#settingsBtn").click();
+  await page.getByRole("radio", { name: "Mosaic" }).click();
+  await expect(page.locator("#summary")).toHaveText("1 of 2 covered");
+  await expect(page.locator("#results .hit", { hasText: "IBAN" })).toHaveAttribute("aria-pressed", "false");
+});
+
 test("a PDF opens page by page and saves back as a redacted PDF", async ({ page }) => {
   const pdf = textPdf([
     ["Statement", `Email: ${EMAIL}`],
