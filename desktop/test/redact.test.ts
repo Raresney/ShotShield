@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { locate, mergeRegions, needsSecondLook, boxGripAt, dragBox, redactText, regionAt, SEVERITY_RANK, type Region } from "../src/redact.ts";
+import { keepToggles, locate, mergeRegions, needsSecondLook, boxGripAt, dragBox, redactText, regionAt, SEVERITY_RANK, type Region } from "../src/redact.ts";
 import type { Detection } from "@shotshield/core";
 import type { OcrWord } from "../src/ocr.ts";
 
@@ -179,5 +179,30 @@ describe("dragBox", () => {
 
   it("stops at the minimum instead of flipping", () => {
     expect(dragBox(b, "w", 500, 0, bounds)).toEqual({ x: 294, y: 100, w: 6, h: 100 });
+  });
+});
+
+describe("keepToggles", () => {
+  const at = (category: Detection["category"], text: string, x: number, hidden: boolean): Region => ({
+    detection: det(0, text.length, { category, text }),
+    hidden,
+    boxes: [{ x, y: 10, w: 50, h: 12 }],
+  });
+
+  it("keeps what the user covered or uncovered through a rebuild", () => {
+    const before = [at("ip_address", "8.8.8.8", 0, true), at("email", "a@b.ro", 100, false)];
+    const after = keepToggles(before, [at("ip_address", "8.8.8.8", 0, false), at("email", "a@b.ro", 100, true)]);
+    expect(after.map((r) => r.hidden)).toEqual([true, false]);
+  });
+
+  it("gives a finding that is new its default", () => {
+    const after = keepToggles([at("email", "a@b.ro", 100, false)], [at("custom", "Falcon", 300, true)]);
+    expect(after[0]!.hidden).toBe(true);
+  });
+
+  it("tells apart the same value in two places", () => {
+    const before = [at("email", "a@b.ro", 0, false), at("email", "a@b.ro", 200, true)];
+    const after = keepToggles(before, [at("email", "a@b.ro", 0, true), at("email", "a@b.ro", 200, true)]);
+    expect(after.map((r) => r.hidden)).toEqual([false, true]);
   });
 });

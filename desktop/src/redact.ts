@@ -27,6 +27,24 @@ export function locate(dets: Detection[], words: OcrWord[]): Region[] {
   }));
 }
 
+// Same finding across a rebuild: same category, same text, same first box.
+const regionKey = (r: Region): string => {
+  const b = r.boxes[0];
+  return `${r.detection.category}|${r.detection.text}|${b ? `${Math.round(b.x)},${Math.round(b.y)}` : ""}`;
+};
+
+/**
+ * Carry the user's cover/uncover choices from `before` into a rebuilt list.
+ * Findings are rebuilt whenever a setting changes; without this every one
+ * would fall back to its default, uncovering whatever the user had covered.
+ * Findings that are new keep their default.
+ */
+export function keepToggles(before: Region[], after: Region[]): Region[] {
+  const chosen = new Map(before.map((r) => [regionKey(r), r.hidden]));
+  for (const r of after) r.hidden = chosen.get(regionKey(r)) ?? r.hidden;
+  return after;
+}
+
 function boxesOverlap(a: Box, b: Box): boolean {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }

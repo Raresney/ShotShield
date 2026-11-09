@@ -6,7 +6,7 @@ import { scan, type Detection, type Severity } from "@shotshield/core";
 import { ocr, ocrAutoOrient, ocrConcurrency, ocrSecondLook, type Box, type OcrResult, type OcrWord, type ProgressFn } from "./ocr.ts";
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
-import { locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, boxGripAt, dragBox, SEVERITY_RANK, type BoxGrip, type Region } from "./redact.ts";
+import { keepToggles, locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, boxGripAt, dragBox, SEVERITY_RANK, type BoxGrip, type Region } from "./redact.ts";
 import { canvasBlob, redactedName, saveAll, saveCanvas, savePdf } from "./export.ts";
 import { loadSettings, renderSettings, saveSettings, scanConfig, type BackgroundHooks } from "./settings.ts";
 import { checkForUpdate, type PendingUpdate } from "./update.ts";
@@ -490,7 +490,9 @@ function computeRegions(doc: Doc): void {
     if (!pass.text.trim()) continue;
     textRegions = mergeRegions(textRegions, locate(scan(pass.text, scanConfig(settings)), pass.words));
   }
-  doc.regions = [...textRegions, ...(settings.faces ? doc.faces : [])];
+  // Keep what the user covered or uncovered: a cover-style switch must not
+  // bring a hand-covered finding back into view.
+  doc.regions = [...keepToggles(doc.regions, textRegions), ...(settings.faces ? doc.faces : [])];
 }
 
 function setProgress(doc: Doc, fraction: number | null, label: string): void {
