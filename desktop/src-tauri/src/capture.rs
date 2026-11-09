@@ -5,6 +5,7 @@
 //! only until the main window takes them; nothing is written to disk.
 
 use std::io::Cursor;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -22,6 +23,17 @@ pub struct CaptureState {
     frame: Mutex<Option<RgbaImage>>,
     crop: Mutex<Option<Vec<u8>>>,
     main_was_visible: Mutex<bool>,
+    /// Set while `start` runs, before the overlay exists to say so.
+    starting: AtomicBool,
+}
+
+/// Clears `starting` however `start` returns.
+struct Starting<'a>(&'a AtomicBool);
+
+impl Drop for Starting<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
 }
 
 #[derive(Deserialize)]
@@ -49,6 +61,14 @@ fn png(img: &RgbaImage, fast: bool) -> Result<Vec<u8>, String> {
 /// Runs off the main thread: the sleep must not stall the event loop that
 /// actually hides the window.
 pub fn start(app: AppHandle) -> Result<(), String> {
+    // One capture at a time. A second press while this one is still hiding the
+    // window would see it hidden and later fail to restore it, so it is
+    // dropped; once the overlay is up, its own presence says the same.
+    let state = app.state::<CaptureState>();
+    if state.starting.swap(true, Ordering::AcqRel) {
+        return Ok(());
+    }
+    let _starting = Starting(&state.starting);
     if app.get_webview_window(OVERLAY).is_some() {
         return Ok(()); // already capturing
     }
@@ -92,7 +112,6 @@ pub fn start(app: AppHandle) -> Result<(), String> {
 
     let (x, y) = (monitor.x().unwrap_or(0), monitor.y().unwrap_or(0));
     let (w, h) = (frame.width(), frame.height());
-    let state = app.state::<CaptureState>();
     *state.frame.lock().unwrap() = Some(frame);
     *state.main_was_visible.lock().unwrap() = was_visible;
 
