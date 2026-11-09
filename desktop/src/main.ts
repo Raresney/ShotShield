@@ -676,12 +676,14 @@ function pdfGroup(doc: Doc | null): Doc[] {
   return docs.filter((d) => d.pdf?.group === group).sort((a, b) => a.pdf!.page - b.pdf!.page);
 }
 
-// Images and PDFs both land here; a PDF opens as one image per page.
-async function addImages(files: File[]): Promise<void> {
+// Images and PDFs both land here; a PDF opens as one image per page. Returns
+// the docs it added, so a caller can follow its own image by identity.
+async function addImages(files: File[]): Promise<Doc[]> {
   const accepted = files.filter((f) => f.type.startsWith("image/") || isPdf(f));
-  if (accepted.length === 0) return;
+  if (accepted.length === 0) return [];
   if (mode !== "image") setMode("image");
   let first: Doc | null = null;
+  const added: Doc[] = [];
   let problem: string | null = null;
   const add = async (name: string, dataUrl: string, pdf?: Doc["pdf"]): Promise<void> => {
     let shown: HTMLImageElement;
@@ -712,6 +714,7 @@ async function addImages(files: File[]): Promise<void> {
       autoOrient: !pdf,
     };
     docs.push(doc);
+    added.push(doc);
     first ??= doc;
     // Show the first new image right away; later ones just join the strip.
     if (doc === first) showDoc(doc);
@@ -745,6 +748,7 @@ async function addImages(files: File[]): Promise<void> {
     }
   }
   if (problem) notify(problem);
+  return added;
 }
 
 // A short message in the status bar, for things that don't belong to one image.
@@ -1582,8 +1586,9 @@ if (canCapture) {
         const bytes = await invoke<ArrayBuffer>("capture_take");
         const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
         const name = `capture-${stamp}.png`;
-        await addImages([new File([bytes], name, { type: "image/png" })]);
-        if (settings.copyCaptures) void copyWhenCovered(name);
+        const [doc] = await addImages([new File([bytes], name, { type: "image/png" })]);
+        // By identity, not name: two captures in one second share a name.
+        if (doc && settings.copyCaptures) void copyWhenCovered(doc);
       } catch (err) {
         console.error("Couldn't receive the capture", err);
       }
@@ -1615,9 +1620,7 @@ if (canCapture) {
 
 // The capture-to-chat shortcut: once the capture's scan is done, put the
 // covered image on the clipboard so it can be pasted straight away.
-async function copyWhenCovered(name: string): Promise<void> {
-  const doc = docs.find((d) => d.name === name);
-  if (!doc) return;
+async function copyWhenCovered(doc: Doc): Promise<void> {
   while (doc.status === "queued" || doc.status === "scanning") {
     await new Promise((r) => setTimeout(r, 150));
     if (!docs.includes(doc)) return;
