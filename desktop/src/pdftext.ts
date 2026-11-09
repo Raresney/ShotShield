@@ -34,10 +34,14 @@ export function textLayerToOcr(items: TextItemLike[], measure: MeasureFn): OcrRe
     const [a = 0, b = 0, c = 0, d = 0, e = 0, f = 0] = item.transform;
     const size = Math.hypot(c, d) || Math.hypot(a, b);
     const line = lines[lines.length - 1]!;
-    if (item.str && Math.abs(b) > Math.abs(a) * 0.05) {
-      // Rotated or vertical text: per-glyph positions aren't worth the maths
-      // here, so every glyph gets the whole run's bounding box. A finding in
-      // it still gets covered, just more generously.
+    // Upright text runs right (a > 0) with its glyphs above the baseline (d < 0,
+    // the viewport's y axis points down). Anything else is turned or flipped:
+    // an upside-down /Rotate 180 page has a < 0 and d > 0.
+    const upright = Math.abs(b) <= Math.abs(a) * 0.05 && a > 0 && d < 0;
+    if (item.str && !upright) {
+      // Rotated, upside-down or vertical text: per-glyph positions aren't worth
+      // the maths here, so every glyph gets the whole run's bounding box. A
+      // finding in it still gets covered, just more generously.
       const len = Math.hypot(a, b) || 1;
       const [dx, dy] = [(a / len) * item.width, (b / len) * item.width];
       // (c, d) points from the baseline toward the glyph tops in page pixels.
