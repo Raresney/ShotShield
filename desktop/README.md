@@ -1,9 +1,6 @@
-# ShotShield — desktop
+# ShotShield desktop
 
-Tauri v2 + Vite (vanilla TS) shell around [`@shotshield/core`](../core).
-
-Right now it scans pasted text. Screenshot capture, OCR and the redaction
-canvas come next.
+The Tauri v2 app around [`@shotshield/core`](../core), with a Vite and vanilla TypeScript front end. It runs the OCR and the face pass, draws the covers on a canvas and writes the redacted image or PDF.
 
 ## Develop
 
@@ -14,5 +11,4 @@ npm install
 npm run tauri dev --workspace desktop
 ```
 
-Needs the [Tauri prerequisites](https://tauri.app/start/prerequisites/) (Rust +
-a C/C++ toolchain; WebView2 ships with Windows).
+You need the [Tauri prerequisites](https://tauri.app/start/prerequisites/): Rust and a C/C++ toolchain. WebView2 already ships with Windows.

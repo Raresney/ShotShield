@@ -2,20 +2,18 @@
 
 Rough order, not dates. Built in the open, so this will move around.
 
-### Now — detection core
-- [ ] Scanner + first detectors (email, API keys, JWT)
-- [ ] Checksum-backed detectors: credit card (Luhn), IBAN (mod-97), CNP
-- [ ] Risk summary for a whole image
+### Done
+- [x] Detection core: API keys and tokens, credentials, JWT, cards (Luhn), IBAN (mod-97), SWIFT/BIC, CNP and CUI with their control digits, ID machine-readable zones, passports, licences, plates, names, addresses, wallets, IPs
+- [x] Desktop app on Windows, macOS and Linux: OCR, face detection, black or mosaic covers, batch mode, PDF in and out, signed auto-updates
+- [x] Screen capture with `Ctrl+Alt+R`, tray and start-at-login on Windows
+- [x] Romanian IDs read off a phone photo, CNP included
 
-### Next — desktop
-- [ ] Tauri shell with a screenshots-folder watcher
-- [ ] OCR (Tesseract) to turn an image into text + regions
-- [ ] Review and blur UI
+### Next
+- [ ] Sharper OCR on hard photos, and a way to use the system's own OCR where there is one
+- [ ] Screen capture on macOS and Linux
+- [ ] Addresses boxed line by line instead of by label
+- [ ] Authenticode-signed Windows installers (see [SIGNING](.github/SIGNING.md))
 
-### Later — mobile
-- [ ] Share-sheet entry point ("Share to ShotShield")
-- [ ] On-device OCR via the platform APIs (ML Kit / Vision)
-- [ ] Visual detectors: faces, ID cards, QR codes
-
-The core is useful and testable before any OCR is wired up, so it ships and gets
-hardened on its own first.
+### Later
+- [ ] Phone app with a share-sheet entry point ("Share to ShotShield")
+- [ ] QR codes and barcodes that carry personal data
