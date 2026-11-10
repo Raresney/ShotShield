@@ -3,6 +3,7 @@ import "@fontsource-variable/jetbrains-mono";
 import "./styles.css";
 
 import { scan, type Detection, type Severity } from "@shotshield/core";
+import { ocrNative } from "./nativeocr.ts";
 import { ocr, ocrAutoOrient, ocrConcurrency, ocrSecondLook, type Box, type OcrResult, type OcrWord, type ProgressFn } from "./ocr.ts";
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
@@ -562,11 +563,25 @@ async function analyze(doc: Doc): Promise<void> {
   const passes = layer ? [layer] : [];
   if (needOcr && (text.trim() || !layer)) passes.push({ text, words });
 
-  // Second look: when the image clearly reads as a Romanian ID but the CNP
-  // came back empty, read it once more at a different scale and on the blue
-  // channel (see preprocessForOcr), and keep both passes. Best-effort: a retry failure must not drop the first pass.
-  const firstDets = scan(text, scanConfig(settings));
-  if (needOcr && needsSecondLook(firstDets, text, settings.enabled.national_id ?? true)) {
+  // The OCR built into the system, where there is one, reads the upright image
+  // too. It keeps lines Tesseract drops (an ID's CNP over a tinted background)
+  // and its findings merge with the rest like any other pass.
+  if (needOcr) {
+    const native = await ocrNative(working);
+    if (!alive()) return;
+    if (native?.text.trim()) passes.push(native);
+  }
+
+  // Second look: when the image clearly reads as a Romanian ID but no pass
+  // found the CNP, read it once more at a different scale and on the blue
+  // channel (see preprocessForOcr), and keep every pass. Best-effort: a
+  // failed retry must not drop the passes already read.
+  const readText = passes
+    .filter((p) => p !== layer)
+    .map((p) => p.text)
+    .join("\n");
+  const firstDets = scan(readText, scanConfig(settings));
+  if (needOcr && needsSecondLook(firstDets, readText, settings.enabled.national_id ?? true)) {
     secondPass = true;
     setProgress(doc, 0, "Taking a closer look");
     try {

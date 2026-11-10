@@ -44,7 +44,7 @@ The engine reads the text in an image with OCR, then runs it through a table of 
 - Public IP addresses, which are listed but left visible unless you cover them
 - Faces, from a small detector that runs inside the app
 
-The OCR reads English and Romanian. Both models ship with the app, so nothing gets downloaded. The matchers expect OCR to slip (an underscore read as a space in the middle of a key, a monospace zero read as `@` or `O`) and still catch the value. Sideways photos are straightened before the scan.
+The OCR reads English and Romanian. Both models ship with the app, so nothing gets downloaded. On Windows the image is also read by the OCR built into the system, and the findings of both reads are merged; it often keeps lines Tesseract loses, like an ID's CNP printed over a tinted background. The matchers expect OCR to slip (an underscore read as a space in the middle of a key, a monospace zero read as `@` or `O`) and still catch the value. Sideways photos are straightened before the scan.
 
 Romanian IDs get extra care, because a phone photo of one is the hardest thing the scanner sees. If the text reads like an ID but no CNP turned up, the scan reads the card a second time at a different scale and on the blue channel only, which lifts the digits off the tinted background of the older cards. It also rebuilds the CNP from the machine-readable zone, where the birth date and the last digits are printed again, and uses that to find the printed number even when OCR got a few of its digits wrong.
 
@@ -75,7 +75,7 @@ A few keys speed up the loop:
 
 ## Privacy
 
-The image stays on your computer. The OCR (tesseract.js), the face model (face-api), the PDF renderer (pdf.js) and even the fonts are bundled into the app and run offline, so there's no account to create and nowhere for the picture to be sent. The build also ships a Content Security Policy that blocks outbound requests, which stops a stray dependency from phoning home. Saving goes through the system dialog, and the app can only write the one file you pick there.
+The image stays on your computer. The OCR (tesseract.js), the face model (face-api), the PDF renderer (pdf.js) and even the fonts are bundled into the app and run offline, so there's no account to create and nowhere for the picture to be sent. The Windows OCR engine the app also asks is part of the system and runs on the device too. The build also ships a Content Security Policy that blocks outbound requests, which stops a stray dependency from phoning home. Saving goes through the system dialog, and the app can only write the one file you pick there.
 
 The export helps too, in a quieter way: the file you save is redrawn from the canvas, pixel by pixel, so camera metadata (EXIF tags, GPS coordinates, the device model) never makes it into the copy you share. And because the redaction is painted into those pixels rather than layered on top, there's nothing underneath to recover.
 

@@ -38,4 +38,13 @@ tauri-plugin-autostart = "2"
 image = { version = "0.25", default-features = false, features = ["png"] }
 tauri-plugin-global-shortcut = "2"
 xcap = { version = "0.9", default-features = false }
+# The system OCR (Windows.Media.Ocr), read alongside Tesseract.
+windows = { version = "0.62", features = [
+  "Foundation",
+  "Foundation_Collections",
+  "Globalization",
+  "Graphics_Imaging",
+  "Media_Ocr",
+  "Storage_Streams",
+] }
 

@@ -1,6 +1,8 @@
 #[cfg(windows)]
 mod capture;
 #[cfg(windows)]
+mod ocr;
+#[cfg(windows)]
 mod tray;
 
 /// Start a screen capture off the calling thread; a failure is reported to the
@@ -61,6 +63,7 @@ pub fn run() {
                 capture::capture_finish,
                 capture::capture_cancel,
                 capture::capture_take,
+                ocr::ocr_native,
                 tray::set_background,
                 tray::autostart_enabled,
                 tray::set_autostart,
