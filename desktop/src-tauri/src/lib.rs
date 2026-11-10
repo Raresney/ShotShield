@@ -1,6 +1,6 @@
 #[cfg(desktop)]
 mod capture;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod ocr;
 #[cfg(target_os = "linux")]
 mod portal;
@@ -67,9 +67,9 @@ pub fn run() {
             .on_window_event(tray::on_window_event);
     }
 
-    // The Windows OCR engine only exists on Windows; elsewhere the page asks
-    // for it once, gets "not found" and stops asking.
-    #[cfg(windows)]
+    // The system OCR engine (Windows.Media.Ocr, or Vision on macOS). Linux has
+    // none, so there the page asks once, gets "not found" and stops asking.
+    #[cfg(any(windows, target_os = "macos"))]
     {
         builder = builder.invoke_handler(tauri::generate_handler![
             capture::capture_start,
@@ -83,7 +83,7 @@ pub fn run() {
             tray::set_autostart,
         ]);
     }
-    #[cfg(all(desktop, not(windows)))]
+    #[cfg(all(desktop, not(any(windows, target_os = "macos"))))]
     {
         builder = builder.invoke_handler(tauri::generate_handler![
             capture::capture_start,
