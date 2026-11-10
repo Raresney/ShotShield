@@ -5,8 +5,8 @@ import { scan } from "../src/index.ts";
 // ReDoS / fuzz guard. Every built-in pattern runs with the global flag over
 // whatever text OCR rebuilds, so a single catastrophic-backtracking pattern
 // would let a crafted (or just unlucky) image hang the scan. These cases feed
-// scan() the inputs that exercise the ambiguous parts of each regex — long runs
-// of the same class, the `.`/`@`/`<` structure the email and MRZ rules pivot on —
+// scan() the inputs that exercise the ambiguous parts of each regex (long runs
+// of the same class, the `.`/`@`/`<` structure the email and MRZ rules pivot on)
 // and assert the whole scan stays well under a time budget. A quadratic pattern
 // clears this comfortably; an exponential one blows past it, failing CI.
 
@@ -39,7 +39,7 @@ const adversarial: Record<string, string> = {
   "mrz date fields": "ZZ123456<1ROU 9503124F ".repeat(N / 20),
   // Long digit runs feed the card / CNP / phone passes at once.
   "digit run": "1".repeat(N),
-  // Separator-joined short tokens hammer the split-CNP multi-run pass — one
+  // Separator-joined short tokens hammer the split-CNP multi-run pass, one
   // case per separator class member it stitches across.
   "split tokens": "12 ".repeat(N),
   "dotted tokens": "12.".repeat(N),

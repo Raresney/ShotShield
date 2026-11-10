@@ -41,16 +41,22 @@ The engine reads the text in an image with OCR, then runs it through a table of 
 - Emails, and phone numbers in international or Romanian form
 - Postal addresses: a street with its number (`Str. Mihai Eminescu nr. 12, bl. A3, ap. 14`, `221 Baker Street`) or the line after an address label such as `Domiciliu:` or `Address:`
 - Bitcoin (checksum-verified) and Ethereum wallet addresses
-- Public IP addresses — listed, but left visible unless you cover them
+- Public IP addresses, which are listed but left visible unless you cover them
 - Faces, from a small detector that runs inside the app
 
-The OCR reads English and Romanian; both models are bundled, nothing is downloaded. The matchers expect OCR to slip — an underscore read as a space in the middle of a key, a monospace zero read as `@` or `O` — and still catch the value. Sideways photos get straightened automatically before the scan. And when an image reads like a Romanian ID but no CNP turned up, the scan takes a second look at a different scale — on a phone photo the number is usually there, just read badly the first time around.
+The OCR reads English and Romanian. Both models ship with the app, so nothing gets downloaded. The matchers expect OCR to slip (an underscore read as a space in the middle of a key, a monospace zero read as `@` or `O`) and still catch the value. Sideways photos are straightened before the scan.
+
+Romanian IDs get extra care, because a phone photo of one is the hardest thing the scanner sees. If the text reads like an ID but no CNP turned up, the scan reads the card a second time at a different scale and on the blue channel only, which lifts the digits off the tinted background of the older cards. It also rebuilds the CNP from the machine-readable zone, where the birth date and the last digits are printed again, and uses that to find the printed number even when OCR got a few of its digits wrong.
 
 Every category has an on/off switch in the Detection drawer, a slider sets the minimum confidence a finding needs to show up, and you can add your own regex rules on top.
 
 ## Using it
 
-Drop a screenshot anywhere on the window — or a whole batch of them — paste one with `Ctrl+V`, or pick files. A PDF works too: each page opens as its own image (up to the first 30) and goes through the same scan, and **Save as PDF** puts the redacted pages back together. The saved PDF is made of flattened page images, so the original's hidden text layer doesn't come along. On Windows you can skip the screenshot step entirely: press `Ctrl+Alt+R` from any app (or the capture button), drag over the part of the screen you want, and it lands in ShotShield already scanned. The capture never touches the disk. Closing the window keeps ShotShield in the tray so the shortcut stays ready, it can start with Windows, and with **Copy captures once covered** switched on a capture goes straight to the clipboard, redacted, ready to paste into a chat. The scan runs — a status pill over the image names each stage — and anything sensitive is covered right away, with the findings listed worst first. Click a finding — in the list or right on the image — to uncover or re-cover it, click a severity count to show only that severity, drag a box on the image to hide something the scan missed, like a home address (drag the box again to move it, or its edges to resize it), and hold the compare button to peek at the original.
+Drop a screenshot (or a whole batch of them) anywhere on the window, paste one with `Ctrl+V`, or pick files. A PDF works too. Each page opens as its own image, up to the first 30, and goes through the same scan; **Save as PDF** puts the redacted pages back together. The saved PDF is made of flattened page images, so the original's hidden text layer doesn't come along.
+
+On Windows you can skip the screenshot step. Press `Ctrl+Alt+R` from any app (or the capture button), drag over the part of the screen you want, and it lands in ShotShield already scanned. The capture never touches the disk. Closing the window keeps ShotShield in the tray so the shortcut stays ready, and it can start with Windows. With **Copy captures once covered** switched on, a capture goes straight to the clipboard, redacted and ready to paste into a chat.
+
+While the scan runs, a status pill over the image names each stage. Anything sensitive is covered as soon as it's found, and the list puts the worst findings first. Click a finding, in the list or on the image, to uncover or re-cover it. Click a severity count to show only that severity. If the scan missed something, like a home address, drag a box over it; you can drag the box again to move it, or its edges to resize it. Hold the compare button to peek at the original.
 
 The Detection drawer also takes your own rules. **Never cover** lists values that should always pass, like your work email or `*@yourcompany.com` (right-click any finding to add it), and **Also cover** adds things only you know are sensitive, as plain text or a regular expression.
 
@@ -71,7 +77,7 @@ A few keys speed up the loop:
 
 The image stays on your computer. The OCR (tesseract.js), the face model (face-api), the PDF renderer (pdf.js) and even the fonts are bundled into the app and run offline, so there's no account to create and nowhere for the picture to be sent. The build also ships a Content Security Policy that blocks outbound requests, which stops a stray dependency from phoning home. Saving goes through the system dialog, and the app can only write the one file you pick there.
 
-The export helps too, in a quieter way: the file you save is redrawn from the canvas, pixel by pixel, so camera metadata — EXIF tags, GPS coordinates, device model — never makes it into the copy you share. And because the redaction is painted into those pixels rather than layered on top, there's nothing underneath to recover.
+The export helps too, in a quieter way: the file you save is redrawn from the canvas, pixel by pixel, so camera metadata (EXIF tags, GPS coordinates, the device model) never makes it into the copy you share. And because the redaction is painted into those pixels rather than layered on top, there's nothing underneath to recover.
 
 ## What's in the repo
 

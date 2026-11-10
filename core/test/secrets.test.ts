@@ -4,7 +4,7 @@ import { scan } from "../src/index.ts";
 import { bech32Valid, publicIpv4 } from "../src/validators.ts";
 
 // Every key-shaped fixture is split across a "+" so the contiguous token never
-// lands in a blob — GitHub push protection rejects the branch otherwise.
+// lands in a blob, since GitHub push protection rejects the branch otherwise.
 
 const ALNUM = "A1b2C3d4E5f6G7h8J9k0";
 const body = (n: number): string => ALNUM.repeat(Math.ceil(n / ALNUM.length)).slice(0, n);

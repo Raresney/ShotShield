@@ -23,7 +23,7 @@ npm run build -w desktop
 
 ## Code style
 
-- The `core/` engine has no runtime dependencies — keep it that way.
+- The `core/` engine has no runtime dependencies. Keep it that way.
 - Build DOM nodes with `textContent` / `createElement`, never `innerHTML`.
 - Keep detectors precise: lean on a checksum or a printed label rather than broad guessing.
 

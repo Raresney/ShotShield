@@ -9,7 +9,7 @@ function sourceSize(src: Source): { w: number; h: number } {
 }
 
 /**
- * Draw `src` rotated clockwise by `turns` quarter-turns (0–3) onto a fresh
+ * Draw `src` rotated clockwise by `turns` quarter-turns (0 to 3) onto a fresh
  * canvas, scaled down so its longest side is at most `maxDim`. Used both to
  * show a re-oriented image and to feed rotated copies to OCR.
  */
@@ -58,14 +58,14 @@ const MIN_STRETCH_SPAN = 48;
 
 /**
  * Prepare an image for OCR. Phone photos of ID cards are noisy and their text is
- * small, so Tesseract often misreads a digit — and a single wrong digit fails the
+ * small, so Tesseract often misreads a digit, and a single wrong digit fails the
  * CNP/IBAN checksum, silently dropping the field. A grayscale + percentile
  * contrast stretch and a modest upscale of small inputs let those digits resolve.
  *
  * Tesseract's read is scale-sensitive: the same field can come through at one
  * render size and vanish at another. The "second" look renders deliberately
- * differently from the first — small inputs push further up (3× toward 3600),
- * native-size photos resample down toward 2400 — so a retry sees genuinely new
+ * differently from the first. Small inputs push further up (3× toward 3600) and
+ * native-size photos resample down toward 2400, so a retry sees new
  * pixel statistics instead of repeating the same miss.
  *
  * The second look also reads the blue channel instead of luma. The older
@@ -75,13 +75,13 @@ const MIN_STRETCH_SPAN = 48;
  *
  * Returns the prepared canvas and the `scale` applied, so word boxes read off it
  * divide cleanly back into the source image's pixel space. The original image is
- * left untouched — this output feeds OCR only, never the display or the export.
+ * left untouched; this output feeds OCR only, never the display or the export.
  */
 export function preprocessForOcr(src: Source, look: OcrLook = "first"): { canvas: HTMLCanvasElement; scale: number } {
   const { w, h } = sourceSize(src);
   const longest = Math.max(w, h);
   // First pass: only ever upscale small inputs (callers already cap the working
-  // size), and never past 2× — beyond that there's no real detail to recover.
+  // size), and never past 2×, since beyond that there's no real detail to recover.
   let scale = 1;
   if (longest > 0) {
     if (look === "first") scale = longest < 2400 ? Math.min(2, 2400 / longest) : 1;
@@ -107,7 +107,7 @@ export function preprocessForOcr(src: Source, look: OcrLook = "first"): { canvas
     hist[g]!++;
   }
 
-  // Stretch the 2nd–98th percentile range to full black/white. Percentiles (not
+  // Stretch the 2nd to 98th percentile range to full black/white. Percentiles (not
   // raw min/max) keep a few stray dark or bright pixels from flattening the stretch.
   const cut = (cw * ch) * 0.02;
   let lo = 0;

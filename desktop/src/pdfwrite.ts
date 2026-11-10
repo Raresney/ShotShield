@@ -1,5 +1,5 @@
 // A minimal PDF writer: one JPEG per page, drawn edge to edge. That's all a
-// redacted copy needs — the pages are flattened images, so no text layer, no
+// redacted copy needs: the pages are flattened images, so no text layer, no
 // fonts and no leftover objects from the original file can leak what was
 // covered.
 

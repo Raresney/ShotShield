@@ -67,7 +67,7 @@ function release(slot: Slot): void {
 }
 
 // A slot's worker, created on first use and reused. Every asset is local
-// (see scripts/copy-vendor.mjs) — nothing is fetched at runtime.
+// (see scripts/copy-vendor.mjs); nothing is fetched at runtime.
 function workerOf(slot: Slot) {
   if (!slot.worker) {
     // English + Romanian: ID cards carry diacritics and Romanian field labels
@@ -96,7 +96,7 @@ function workerOf(slot: Slot) {
 // How many confident runs of 4+ letters a word holds. Rotated or upside-down
 // text gives Tesseract only short, shaky fragments, so counting these separates
 // an upright read from a sideways one far more reliably than a raw confidence
-// count — which Tesseract happily hands to the garbage it reads off rotated
+// count, which Tesseract happily hands to the garbage it reads off rotated
 // text. Runs are counted *inside* words: a config line is a single OCR word
 // ("DATABASE_URL=postgres://admin") yet holds three real runs, and scoring it
 // zero made upright code screenshots look unreadable.
@@ -106,7 +106,7 @@ export function realWordRuns(text: string, confidence: number): number {
 }
 
 interface Scored extends OcrResult {
-  /** How many real words we read — a robust proxy for "this is the right way up". */
+  /** How many real words we read. A good proxy for "this is the right way up". */
   score: number;
 }
 
@@ -173,9 +173,9 @@ export async function ocr(image: HTMLImageElement, progress?: ProgressFn): Promi
 }
 
 /**
- * The retry read: same image, deliberately different render scale (see
- * preprocessForOcr). Run when the first pass looked like an ID but missed the
- * CNP — the field most often lost to a marginal, scale-dependent read.
+ * The retry read: same image, different render scale and the blue
+ * channel instead of luma (see preprocessForOcr). Run when the first pass
+ * looked like an ID but missed the CNP.
  */
 export async function ocrSecondLook(
   image: HTMLImageElement,
@@ -192,14 +192,14 @@ export async function ocrSecondLook(
   }
 }
 
-// This many real words means the read is clearly upright — skip the search.
+// This many real words means the read is clearly upright, so skip the search.
 const CLEARLY_UPRIGHT = 8;
 
 /**
  * Pick the orientation to OCR from the search scores (index = quarter turns).
  * The image as given wins unless a turn reads clearly better: a screenshot is
  * almost always upright already, and a near-tie between orientations is noise,
- * not evidence — rotating on it is what flipped upright code screenshots.
+ * not evidence. Rotating on it is what flipped upright code screenshots.
  */
 export function pickOrientation(scores: number[]): number {
   const asIs = scores[0] ?? 0;
@@ -231,7 +231,7 @@ export async function ocrAutoOrient(
       return { text: first.text, words: first.words, quarterTurns: 0 };
     }
 
-    // Not clearly upright — it may be sideways. Score all four orientations on a
+    // Not clearly upright, so it may be sideways. Score all four orientations on a
     // downscaled copy (a like-for-like comparison) and keep whichever reads best.
     slot.phase = "orienting";
     const scores: number[] = [];
