@@ -29,15 +29,21 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
-
 # Screen capture, plus the tray icon and start-at-login that keep its shortcut
-# available with the window closed. Windows and macOS only: see build.rs.
-[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+# available with the window closed.
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+# The screen grab itself: xcap on Windows and macOS. Its Linux backend needs a
+# newer PipeWire than the distros the Linux build supports, so Linux asks the
+# desktop's screenshot portal over D-Bus instead.
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
 xcap = { version = "0.9", default-features = false }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"
 
 [target."cfg(windows)".dependencies]
 # The system OCR (Windows.Media.Ocr), read alongside Tesseract.

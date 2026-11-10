@@ -18,6 +18,7 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Position, Size, State
 use tauri::PhysicalSize;
 #[cfg(target_os = "macos")]
 use tauri::{LogicalPosition, LogicalSize};
+#[cfg(not(target_os = "linux"))]
 use xcap::Monitor;
 
 const OVERLAY: &str = "capture";
@@ -40,7 +41,7 @@ impl Drop for Starting<'_> {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug, PartialEq)]
 pub struct Rect {
     x: u32,
     y: u32,
@@ -94,20 +95,13 @@ pub fn start(app: AppHandle) -> Result<(), String> {
         }
     };
 
-    let shot = (|| -> Result<(Monitor, RgbaImage), String> {
-        let monitor = pick_monitor(&app)?;
-        let frame = monitor.capture_image().map_err(|e| e.to_string())?;
-        Ok((monitor, frame))
-    })();
-    let (monitor, frame) = match shot {
+    let (frame, position, size) = match grab(&app) {
         Ok(v) => v,
         Err(e) => {
             restore(&app);
             return Err(e);
         }
     };
-
-    let (position, size) = overlay_rect(&monitor, &frame);
     *state.frame.lock().unwrap() = Some(frame);
     *state.main_was_visible.lock().unwrap() = was_visible;
 
@@ -128,11 +122,89 @@ pub fn start(app: AppHandle) -> Result<(), String> {
     let _ = overlay.set_size(size);
     #[cfg(target_os = "macos")]
     raise_overlay(&app, overlay);
+    // Wayland ignores where an app asks to put its window; fullscreen is the
+    // one way to cover a whole monitor there (and works the same on X11).
+    #[cfg(target_os = "linux")]
+    let _ = overlay.set_fullscreen(true);
     Ok(())
+}
+
+/// The frozen frame of one monitor, and where the overlay goes to cover it.
+#[cfg(not(target_os = "linux"))]
+fn grab(app: &AppHandle) -> Result<(RgbaImage, Position, Size), String> {
+    let monitor = pick_monitor(app)?;
+    let frame = monitor.capture_image().map_err(|e| e.to_string())?;
+    let (position, size) = overlay_rect(&monitor, &frame);
+    Ok((frame, position, size))
+}
+
+/// On Linux the desktop's own screenshot portal takes the picture (the only
+/// way on Wayland, and it needs no PipeWire). It shoots every monitor at once,
+/// so the frame is cut down to the one the overlay will cover.
+#[cfg(target_os = "linux")]
+fn grab(app: &AppHandle) -> Result<(RgbaImage, Position, Size), String> {
+    let shot = crate::portal::screenshot()?;
+    let monitors = app.available_monitors().map_err(|e| e.to_string())?;
+    let target = app
+        .cursor_position()
+        .ok()
+        .and_then(|c| app.monitor_from_point(c.x, c.y).ok().flatten())
+        .or_else(|| app.primary_monitor().ok().flatten())
+        .or_else(|| monitors.first().cloned());
+    let Some(target) = target else {
+        let (w, h) = (shot.width(), shot.height());
+        return Ok((shot, PhysicalPosition::new(0, 0).into(), PhysicalSize::new(w, h).into()));
+    };
+    let areas: Vec<Area> = monitors.iter().map(monitor_area).collect();
+    let frame = match crop_to(&areas, monitor_area(&target), shot.width(), shot.height()) {
+        Some(r) => image::imageops::crop_imm(&shot, r.x, r.y, r.w, r.h).to_image(),
+        None => shot,
+    };
+    Ok((frame, (*target.position()).into(), (*target.size()).into()))
+}
+
+/// A monitor's place on the desktop, in physical pixels (left of or above the
+/// primary one is negative).
+#[derive(Clone, Copy)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+struct Area {
+    x: i64,
+    y: i64,
+    w: i64,
+    h: i64,
+}
+
+#[cfg(target_os = "linux")]
+fn monitor_area(m: &tauri::Monitor) -> Area {
+    let (p, s) = (m.position(), m.size());
+    Area { x: p.x.into(), y: p.y.into(), w: s.width.into(), h: s.height.into() }
+}
+
+/// Where `target` sits in a screenshot of all `monitors`, scaled to the
+/// screenshot's own size (a portal may shoot in logical rather than physical
+/// pixels). None when it is the whole picture or can't be placed.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn crop_to(monitors: &[Area], target: Area, shot_w: u32, shot_h: u32) -> Option<Rect> {
+    let left = monitors.iter().map(|m| m.x).min()?;
+    let top = monitors.iter().map(|m| m.y).min()?;
+    let right = monitors.iter().map(|m| m.x + m.w).max()?;
+    let bottom = monitors.iter().map(|m| m.y + m.h).max()?;
+    let (all_w, all_h) = (right - left, bottom - top);
+    if all_w <= 0 || all_h <= 0 || (target.w == all_w && target.h == all_h) {
+        return None;
+    }
+    let sx = f64::from(shot_w) / all_w as f64;
+    let sy = f64::from(shot_h) / all_h as f64;
+    let x = (((target.x - left) as f64 * sx).round() as u32).min(shot_w);
+    let y = (((target.y - top) as f64 * sy).round() as u32).min(shot_h);
+    let w = ((target.w as f64 * sx).round() as u32).min(shot_w - x);
+    let h = ((target.h as f64 * sy).round() as u32).min(shot_h - y);
+    (w > 0 && h > 0).then_some(Rect { x, y, w, h })
 }
 
 /// The monitor under the cursor, or the first one when the cursor can't be
 /// read.
+#[cfg(not(target_os = "linux"))]
 fn pick_monitor(app: &AppHandle) -> Result<Monitor, String> {
     let under_cursor = app.cursor_position().ok().and_then(|c| {
         let (x, y) = cursor_point(app, c);
@@ -150,7 +222,7 @@ fn pick_monitor(app: &AppHandle) -> Result<Monitor, String> {
 
 // xcap lays monitors out in physical pixels, except on macOS where it uses
 // points, the same units the window server does.
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn cursor_point(_app: &AppHandle, c: PhysicalPosition<f64>) -> (i32, i32) {
     (c.x as i32, c.y as i32)
 }
@@ -166,7 +238,7 @@ fn cursor_point(app: &AppHandle, c: PhysicalPosition<f64>) -> (i32, i32) {
 }
 
 /// Where the overlay goes so it covers exactly the captured monitor.
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn overlay_rect(monitor: &Monitor, frame: &RgbaImage) -> (Position, Size) {
     let (x, y) = (monitor.x().unwrap_or(0), monitor.y().unwrap_or(0));
     (
@@ -288,4 +360,41 @@ pub fn capture_cancel(app: AppHandle, state: State<'_, CaptureState>) {
 pub fn capture_take(state: State<'_, CaptureState>) -> Result<Response, String> {
     let bytes = state.crop.lock().unwrap().take().ok_or("nothing captured")?;
     Ok(Response::new(bytes))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const fn area(x: i64, y: i64, w: i64, h: i64) -> Area {
+        Area { x, y, w, h }
+    }
+
+    #[test]
+    fn one_monitor_is_the_whole_shot() {
+        let only = area(0, 0, 1920, 1080);
+        assert_eq!(crop_to(&[only], only, 1920, 1080), None);
+    }
+
+    #[test]
+    fn cuts_the_right_monitor_out_of_a_side_by_side_shot() {
+        let (left, right) = (area(0, 0, 1920, 1080), area(1920, 0, 2560, 1440));
+        let cut = crop_to(&[left, right], right, 4480, 1440);
+        assert_eq!(cut, Some(Rect { x: 1920, y: 0, w: 2560, h: 1440 }));
+    }
+
+    #[test]
+    fn handles_a_monitor_left_of_the_primary() {
+        let (side, primary) = (area(-1280, 0, 1280, 1024), area(0, 0, 1920, 1080));
+        let cut = crop_to(&[side, primary], primary, 3200, 1080);
+        assert_eq!(cut, Some(Rect { x: 1280, y: 0, w: 1920, h: 1080 }));
+    }
+
+    #[test]
+    fn scales_when_the_portal_shoots_in_logical_pixels() {
+        // Two 2x monitors, shot at half their physical size.
+        let (a, b) = (area(0, 0, 2560, 1600), area(2560, 0, 2560, 1600));
+        let cut = crop_to(&[a, b], b, 2560, 800);
+        assert_eq!(cut, Some(Rect { x: 1280, y: 0, w: 1280, h: 800 }));
+    }
 }
