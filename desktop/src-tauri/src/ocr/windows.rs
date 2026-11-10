@@ -1,31 +1,11 @@
-//! Text recognition with the OCR engine built into Windows (Windows.Media.Ocr).
-//!
-//! It runs on the device like Tesseract does, but reads phone photos of ID
-//! cards far better: it keeps lines that sit on a tinted background, where
-//! Tesseract drops them. The front end treats this as one more pass and merges
-//! it with its own, so a machine without an OCR language simply falls back.
+//! Windows.Media.Ocr, the engine that ships with Windows.
 
-use serde::Serialize;
-use tauri::ipc::{InvokeBody, Request};
 use windows::Globalization::Language;
 use windows::Graphics::Imaging::{BitmapAlphaMode, BitmapPixelFormat, SoftwareBitmap};
 use windows::Media::Ocr::OcrEngine;
 use windows::Storage::Streams::DataWriter;
 
-#[derive(Serialize)]
-pub struct Word {
-    text: String,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-}
-
-/// One recognized line, its words in reading order.
-#[derive(Serialize)]
-pub struct Line {
-    words: Vec<Word>,
-}
+use super::{Line, Word};
 
 fn engine() -> Result<OcrEngine, String> {
     // The user's own languages first; English is the usual fallback that ships
@@ -37,19 +17,7 @@ fn engine() -> Result<OcrEngine, String> {
     OcrEngine::TryCreateFromLanguage(&en).map_err(|_| "no OCR language installed".to_string())
 }
 
-fn header(request: &Request<'_>, name: &str) -> Result<i32, String> {
-    request
-        .headers()
-        .get(name)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.parse().ok())
-        .ok_or_else(|| format!("missing {name}"))
-}
-
-fn recognize(mut rgba: Vec<u8>, width: i32, height: i32) -> Result<Vec<Line>, String> {
-    if width <= 0 || height <= 0 || rgba.len() != width as usize * height as usize * 4 {
-        return Err("bad image size".into());
-    }
+pub fn recognize(mut rgba: Vec<u8>, width: i32, height: i32) -> Result<Vec<Line>, String> {
     let max = OcrEngine::MaxImageDimension().map_err(|e| e.to_string())? as i32;
     if width > max || height > max {
         return Err("image too large for the system OCR".into());
@@ -86,19 +54,4 @@ fn recognize(mut rgba: Vec<u8>, width: i32, height: i32) -> Result<Vec<Line>, St
         Ok(out)
     };
     run().map_err(|e| e.to_string())
-}
-
-/// Read raw RGBA pixels (the request body) of the size given in the `width`
-/// and `height` headers. Returns the lines found, empty if there were none.
-#[tauri::command]
-pub async fn ocr_native(request: Request<'_>) -> Result<Vec<Line>, String> {
-    let width = header(&request, "width")?;
-    let height = header(&request, "height")?;
-    let InvokeBody::Raw(bytes) = request.body() else {
-        return Err("expected raw pixels".into());
-    };
-    let rgba = bytes.clone();
-    tauri::async_runtime::spawn_blocking(move || recognize(rgba, width, height))
-        .await
-        .map_err(|e| e.to_string())?
 }
