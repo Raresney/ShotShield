@@ -21,9 +21,12 @@ const digits = (s: string): string => [...s].map((c) => asDigit(c) ?? "").join("
 
 // The older card's second MRZ line (TD2, 36 chars): document number + check,
 // ROU, birth date + check, sex, expiry + check, then the CNP's first digit and
-// last six, then the final check digit.
+// last six, then the final check digit. Matched from the nationality on: the
+// document number in front carries nothing of the CNP, and OCR misreads its
+// series letters (an S read as "$") often enough that requiring it would lose
+// the line.
 const D = "[0-9OQDIZSB]";
-const TD2_RO = new RegExp(`[A-Z0-9<]{9}[0-9O<]R[O0Q]U(${D}{6})${D}[MF<]${D}{6}${D}(${D}{7})`, "g");
+const TD2_RO = new RegExp(`R[O0Q]U(${D}{6})${D}[MF<]${D}{6}${D}(${D}{7})`, "g");
 
 /** The CNPs that ROU second MRZ lines in `text` spell out, checksum-valid only. */
 export function cnpsFromMrz(text: string): string[] {

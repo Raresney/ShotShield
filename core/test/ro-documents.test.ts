@@ -60,6 +60,9 @@ test("the second MRZ line as OCR reads it off a photo", () => {
   // And the other way round: a zero read for the O of ROU.
   const zero = "ZZ123456<1R0U9503124F301015024012313";
   assert.deepEqual(hits(zero, "mrz"), [zero]);
+  // A series letter read as a symbol, and background specks after the line.
+  const symbol = "Z$123456<1R0U9503124F301015024012313 SS";
+  assert.deepEqual(hits(symbol, "mrz"), [symbol]);
 });
 
 test("the second MRZ line of a passport and of a credit-card-sized ID", () => {
