@@ -67,6 +67,10 @@ jobs:
       - run: npm run build -w desktop
       - run: cargo check --locked
         working-directory: desktop/src-tauri
+      # Unit tests, including the ones only a given platform compiles (the
+      # Linux portal's URI handling).
+      - run: cargo test --locked --lib
+        working-directory: desktop/src-tauri
 
   # The real flows in a browser: OCR, PDF, saving, settings. Slower, so it runs
   # beside the unit job rather than inside it.
