@@ -72,7 +72,7 @@ export function mergeRegions(base: Region[], extra: Region[]): Region[] {
 /**
  * Should the scan take a second, differently-scaled look at this image?
  * Only when it clearly reads as a Romanian ID (a "seria" document number, or
- * CNP/ROMÂNIA/ROU in the text — the MRZ of a Romanian document carries ROU)
+ * CNP/ROMÂNIA/ROU in the text; the MRZ of a Romanian document carries ROU)
  * yet no CNP was detected: that's the field a marginal OCR read loses most,
  * and the retry is one extra pass on exactly the miss that matters. Ordinary
  * screenshots and foreign documents never pay for it.
@@ -137,7 +137,7 @@ export const coverPad = (b: Box): number => Math.max(2, b.h * 0.15);
 
 /**
  * Which region sits under an image-space point, if any. When boxes overlap the
- * smallest wins — it's the one the pointer is most clearly aiming at.
+ * smallest wins, since it's the one the pointer is most clearly aiming at.
  */
 export function regionAt(regions: Region[], x: number, y: number): number | null {
   let hit: number | null = null;
@@ -195,7 +195,7 @@ export function paint(
       rects.push({ x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 });
     }
   }
-  // Manual boxes are exactly what the user dragged — no padding.
+  // Manual boxes are exactly what the user dragged, with no padding.
   rects.push(...manual);
   for (const r of rects) cover(ctx, r, style);
 }

@@ -87,7 +87,7 @@ export function scan(text: string, config?: ScanConfig): Detection[] {
         const res = rule.refine(raw);
         if (res === false) {
           // A rejected candidate must not swallow text: the same rule may have
-          // a real hit starting inside the rejected span — e.g. the split-CNP
+          // a real hit starting inside the rejected span, e.g. the split-CNP
           // stitch greedily gluing a neighbour onto a real CNP and failing the
           // digit count, with the true match starting one token in. Resume
           // just past the match start, not past its end.

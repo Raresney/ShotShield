@@ -31,8 +31,8 @@ const unconfuseDigits = (s: string): string =>
 
 // A CNP encodes the holder's sex/century, birth date and county before the
 // control digit: S YY MM DD JJ NNN C. Validating that embedded date and county
-// is far more robust on a photo than the control digit — a single misread digit
-// breaks the checksum, but the month, day and county still read true — while
+// holds up far better on a photo than the control digit (a single misread digit
+// breaks the checksum, but the month, day and county still read true) while
 // staying precise: a random 13-digit run (a timestamp, an order id) almost
 // always lands an out-of-range month or day. County codes run 01-52; the lead
 // digit runs 1-9 (7/8 are resident foreigners, 9 pre-2022 foreign nationals).
@@ -73,7 +73,7 @@ const D = "[-– ]";
 // 4+ key chars and carry a digit, so ordinary words after a key ("…dc is the
 // live key") never get glued on. `/` is in the class because OCR reads a 7 as
 // one, and `@` because a slashed monospace zero can come back as one. Seen
-// live: "4eC39HqLyjWDarjtT 1zdp7dc" — a 7-char tail left exposed.
+// live: "4eC39HqLyjWDarjtT 1zdp7dc", a 7-char tail left exposed.
 const TAIL = "(?: (?=[A-Za-z_/-]{0,40}\\d)[A-Za-z0-9_/@-]{4,})*";
 
 const PLACEHOLDERS = new Set([
@@ -83,7 +83,7 @@ const PLACEHOLDERS = new Set([
 ]);
 
 // Is this value worth covering? Rejects masks, placeholders, template and env
-// references, and code — anything that isn't a literal secret.
+// references, and code: anything that isn't a literal secret.
 function looksLikeSecretValue(v: string): boolean {
   if (v.length < 4) return false;
   if (/^[*•●·x.\-_#]+$/i.test(v)) return false;
@@ -190,7 +190,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     source: "(?<=\\bBearer[ ]{1,3})(?!eyJ)[A-Za-z0-9._~+/-]{16,}={0,2}", baseConfidence: 0.85 },
   { category: "credential", label: "Basic auth credentials", severity: "critical",
     source: "(?<=\\bAuthorization:?[ ]{0,3}Basic[ ]{1,3})[A-Za-z0-9+/]{8,}={0,2}", flags: "i", baseConfidence: 0.92 },
-  // scheme://user:password@host — connection strings and URLs with the login
+  // scheme://user:password@host: connection strings and URLs with the login
   // baked in. The whole URL is covered: the host is half the leak.
   // OCR sometimes puts a space after the scheme colon ("postgres: //").
   { category: "credential", label: "Credentials in URL", severity: "critical",
@@ -226,7 +226,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // ── Payment cards ─────────────────────────────────────────────────────────
   // Loose digit-run match (spaces/dashes allowed), then Luhn decides. Brand is
   // a nicer label than a bare "card number". The lookarounds reject a run glued
-  // to letters or the `<` filler of an ID's machine-readable zone — those pack
+  // to letters or the `<` filler of an ID's machine-readable zone. Those pack
   // long digit strings that pass Luhn by chance but aren't cards. Floor is 14:
   // 13-digit PANs are extinct and 13 collides exactly with the Romanian CNP.
   { category: "credit_card", label: "Payment card", severity: "critical",
@@ -239,7 +239,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
 
   // ── IBAN ──────────────────────────────────────────────────────────────────
   // The leading lookbehind stops the country-code pair from starting inside a
-  // longer token — e.g. the "OU82…" buried in an ID's "IDROU82…" MRZ line,
+  // longer token, e.g. the "OU82…" buried in an ID's "IDROU82…" MRZ line,
   // which could otherwise clear mod-97 by chance.
   // A monospace O often reads as 0 (RO49 -> R049), so the country code's second
   // letter may come back as 0/1; mod-97 decides whether the O/I reading holds.
@@ -263,7 +263,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // ── SWIFT/BIC ───────────────────────────────────────────────────────────────
   // A bank identifier is 8 or 11 chars: 4-letter bank, 2-letter country, 2 alnum
   // location, optional 3 alnum branch. Eight uppercase chars are common in code
-  // (constant names, DEADBEEF), so we anchor on a printed BIC/SWIFT label — the
+  // (constant names, DEADBEEF), so we anchor on a printed BIC/SWIFT label. The
   // label carries the precision, the strict shape guards the value. Uppercase-only
   // on purpose, so the "Swift" language word in a dev screenshot isn't flagged.
   { category: "bic", label: "SWIFT/BIC", severity: "high",
@@ -271,7 +271,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     baseConfidence: 0.9 },
 
   // ── Card security code ───────────────────────────────────────────────────────
-  // A CVV is just 3–4 digits — meaningless on its own. Anchored on the printed
+  // A CVV is just 3 or 4 digits, meaningless on its own. Anchored on the printed
   // label it's a precise, high-value catch: a CVV beside a card is a real leak.
   { category: "cvv", label: "Card security code", severity: "high",
     source: "(?<=\\b(?:CVV2?|CVC2?|CV2|CVN)\\b[\\s:]{0,3})\\d{3,4}(?!\\d)",
@@ -279,26 +279,26 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
 
   // ── National IDs ──────────────────────────────────────────────────────────
   // Two passes for the Romanian CNP. First the strict one: a bare 13-digit run
-  // is only a CNP if its control digit checks out — that keeps random 13-digit
+  // is only a CNP if its control digit checks out. That keeps random 13-digit
   // numbers in logs and configs from being flagged.
   { category: "national_id", label: "CNP (RO)", severity: "high",
     source: "[1-9]\\d{12}", baseConfidence: 0.4,
     refine: (raw) => (cnpValid(raw) ? { confidence: 0.95 } : false) },
 
   // Then the buletin pass: the CNP printed behind a "CNP" label. A phone photo
-  // defeats the strict rule — OCR splits the run with stray spaces (or a dot,
+  // defeats the strict rule. OCR splits the run with stray spaces (or a dot,
   // a dash where a hologram line crosses the digits), glues the label onto the
   // number ("CNP5050…"), and flips digits to look-alike letters (O→0, S→5,
   // B→8, but also 2→Z, 4→A, 6→G, 7→T, 9→g…), breaking the control digit.
-  // Anchored loosely on the label — leading boundary only, so a glued number
-  // still matches — we undo those confusables, allow the separators, and
+  // Anchored loosely on the label (leading boundary only, so a glued number
+  // still matches), we undo those confusables, allow the separators, and
   // redact a ~13-digit run whether or not the checksum survives: the label
   // carries the precision, and one misread digit shouldn't leave an ID number
   // in the clear. Newlines are deliberately NOT separators here: this greedy,
   // label-anchored span would swallow the next line's digits, and the winning
   // over-long detection then shadows that line's own hit in overlap resolution,
   // leaving its tail exposed. A CNP broken across lines is the split pass's
-  // job — its runs are digit-class only, so its span is exact.
+  // job; its runs are digit-class only, so its span is exact.
   { category: "national_id", label: "CNP (RO)", severity: "high",
     source: "(?<=\\bCNP[\\s.:|/-]{0,4})[\\dOoQDIlSBbZzAGTgq][\\dOoQDIlSBbZzAGTgq .\\-–—]{11,17}",
     baseConfidence: 0.85,
@@ -310,7 +310,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
 
   // The label-free pass: a 13-character run that reads as a CNP once the OCR
   // look-alikes are undone, with a valid embedded birth date and county. This is
-  // the net under the other two — it catches the printed CNP when a misread both
+  // the net under the other two. It catches the printed CNP when a misread both
   // broke the control digit and mangled the "CNP" label (or pushed it out of
   // reach), the one case where the strict and label passes both come up empty.
   // The lookarounds keep it from starting mid-token or stealing the first 13
@@ -327,7 +327,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
 
   // The split pass: a buletin prints the CNP as one solid 13-digit block, but a
   // photo's kerning gaps or a hologram crossing the digits make OCR read it as
-  // several word-boxes — so the rebuilt text carries separators the contiguous
+  // several word-boxes, so the rebuilt text carries separators the contiguous
   // passes above can't cross ("5 050218 226798"), and the label pass misses it
   // when the "CNP" caption wasn't read right next to the number. Besides spaces
   // OCR drops a dot or dash where a guilloche line cuts the run, and a line
@@ -348,8 +348,8 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
       return { confidence: cnpValid(d) ? 0.9 : 0.8 };
     } },
 
-  // Tax ID (Romanian CUI/CIF): 2–10 digits with a control digit. A short number
-  // clears the checksum ~9% of the time, so the bare value isn't enough — anchor
+  // Tax ID (Romanian CUI/CIF): 2 to 10 digits with a control digit. A short number
+  // clears the checksum ~9% of the time, so the bare value isn't enough. Anchor
   // on a RO fiscal prefix or a CUI/CIF/"cod fiscal" label, then let the checksum
   // confirm it.
   { category: "tax_id", label: "Tax ID (RO)", severity: "high",
@@ -360,14 +360,14 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // ── ID documents ────────────────────────────────────────────────────────────
   // Machine-readable zone: the `<`-padded block at the bottom of passports and
   // ID cards. Its signature is a long, all-uppercase run of letters/digits with
-  // `<` filler — which ordinary prose and code (lowercase, `>`, `/`) never make.
+  // `<` filler, which ordinary prose and code (lowercase, `>`, `/`) never make.
   // It packs name, document number, nationality and birth date, so the whole run
   // is critical. (Reading the `<` filler off a photo needs a clean, upright scan.)
   // Bounded to 90 chars each side (a single MRZ line is ≤44; the longest format
   // is two of them, never on one line since OCR keeps a newline between rows that
   // `[A-Z0-9<]` can't cross). The bound is what makes this safe: an unbounded `*`
   // before `<<` greedily eats to end-of-text then backtracks to find the `<<`,
-  // which on a long uppercase blob costs O(n) per start position — O(n²) overall.
+  // which on a long uppercase blob costs O(n) per start position, O(n²) overall.
   { category: "mrz", label: "ID machine-readable zone", severity: "critical",
     source: "[A-Z0-9<]{0,90}<<[A-Z0-9<]{0,90}", baseConfidence: 0.5,
     refine: (raw) => {
@@ -457,7 +457,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // ── Name ────────────────────────────────────────────────────────────────────
   // The holder's name behind a buletin's trilingual Nume/Nom/Last-name labels.
   // The lookbehind matches the label but keeps it out of the hit, so only the
-  // uppercase value (1–3 words) is boxed. Best-effort: it leans on OCR keeping
+  // uppercase value (1 to 3 words) is boxed. Best-effort: it leans on OCR keeping
   // the label next to its value. A name with no label at all needs NER, not a
   // regex, so it's out of scope.
   { category: "name", label: "Name", severity: "high",
@@ -471,7 +471,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
         ? false
         : { confidence: 0.6 } },
 
-  // A person's name behind a form or receipt label — "Name: Ana Popescu",
+  // A person's name behind a form or receipt label: "Name: Ana Popescu",
   // "Cardholder: Ion Ionescu", "Titular cont: Maria Pop". The colon is required
   // and so are two or three capitalised words (given + family name), which
   // keeps headings ("Name: Server") and single words out. OCR often reads a
@@ -496,7 +496,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
 
   // ── Phone numbers ───────────────────────────────────────────────────────────
   // Two precise shapes rather than one greedy run, since phone detection is
-  // false-positive prone. International, explicit "+": a country code then 8–15
+  // false-positive prone. International, explicit "+": a country code then 8 to 15
   // digits once separators are stripped.
   { category: "phone", label: "Phone number", severity: "high",
     // A monospace 0 can read as @ or O; up to two such slips are undone.
@@ -527,7 +527,7 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
     source: "(?<![A-Za-z0-9])0x[0-9a-fA-F]{40}(?![A-Za-z0-9])", baseConfidence: 0.85 },
 
   // ── IP addresses ────────────────────────────────────────────────────────────
-  // Public addresses only — a home or server IP is a location and a target.
+  // Public addresses only. A home or server IP is a location and a target.
   // Low severity: listed for review, not covered by default, since dev
   // screenshots are full of harmless ones (8.8.8.8).
   { category: "ip_address", label: "Public IP address", severity: "low",

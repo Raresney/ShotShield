@@ -83,8 +83,8 @@ const svgIcon = (id: string): SVGSVGElement => {
 };
 
 // ── Theme ──
-// Dark by default. The toggle sets data-theme on the root — the hook every CSS
-// theme rule keys off — and the choice survives a restart.
+// Dark by default. The toggle sets data-theme on the root (every CSS theme
+// rule keys off it), and the choice survives a restart.
 type Theme = "dark" | "light";
 function applyTheme(t: Theme): void {
   if (t === "light") document.documentElement.setAttribute("data-theme", "light");
@@ -105,7 +105,7 @@ themeToggle.addEventListener("click", () => {
   try {
     localStorage.setItem("shotshield.theme", theme);
   } catch {
-    /* storage unavailable — applies for this session only */
+    /* storage unavailable: applies for this session only */
   }
   applyTheme(theme);
 });
@@ -194,7 +194,7 @@ function showEmpty(): void {
     title.textContent = input.value.trim() ? "Nothing sensitive found" : "Nothing scanned yet";
     copy.textContent = input.value.trim()
       ? "No secrets or personal data in this text."
-      : "Paste text on the left — findings appear here as you type.";
+      : "Paste text on the left. Findings appear here as you type.";
   } else {
     title.textContent = "No findings yet";
     copy.textContent = "Scan a screenshot and every detection lands here.";
@@ -233,7 +233,7 @@ function accentColor(): string {
 }
 let hovered: Box[] | null = null;
 
-// Don't echo full secrets back in the list — show just enough to recognise.
+// Don't echo full secrets back in the list. Show just enough to recognise.
 function mask(s: string): string {
   const t = s.replace(/\s+/g, " ").trim();
   if (t.length <= 6) return "•".repeat(Math.max(1, t.length));
@@ -302,7 +302,7 @@ function scanText(): void {
   const shown = dets
     .filter((d) => !sevFilter || d.severity === sevFilter)
     .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
-  // Text results re-render on every keystroke — no entrance animation, or the
+  // Text results re-render on every keystroke, so they skip the entrance animation; the
   // list would flicker while typing.
   results.classList.remove("fresh");
   results.replaceChildren(
@@ -321,12 +321,12 @@ function scanText(): void {
     }),
   );
   summary.textContent = `${dets.length} ${dets.length === 1 ? "thing" : "things"} to remove before sharing`;
-  // Pasted text is only flagged, never covered — every hit counts as exposed.
+  // Pasted text is only flagged, never covered, so every hit counts as exposed.
   showDashboard(dets.map((d) => d.severity), 0, dets.length);
 }
 input.addEventListener("input", scanText);
 
-// Re-run whatever is on screen when a setting changes — the text scan, and the
+// Re-run whatever is on screen when a setting changes: the text scan, and the
 // image's findings (recomputed from the cached OCR, so no fresh read needed).
 function onSettingsChange(): void {
   scanText();
@@ -354,7 +354,7 @@ function offerAllow(e: MouseEvent, value: string): void {
   const item = document.createElement("button");
   item.type = "button";
   item.setAttribute("role", "menuitem");
-  item.textContent = `Never cover “${mask(value)}”`;
+  item.textContent = `Never cover "${mask(value)}"`;
   item.addEventListener("click", () => {
     closeAllowMenu();
     if (!settings.allow.includes(value)) settings.allow.push(value);
@@ -484,7 +484,7 @@ function refreshThumb(doc: Doc): void {
 function computeRegions(doc: Doc): void {
   // Union the passes: the second look mostly re-reads what the first saw, so
   // duplicate hits (same category, same spot) collapse and only what one pass
-  // caught alone — the missed CNP — comes through as a new region.
+  // caught alone (the missed CNP) comes through as a new region.
   let textRegions: Region[] = [];
   for (const pass of doc.ocr) {
     if (!pass.text.trim()) continue;
@@ -562,10 +562,9 @@ async function analyze(doc: Doc): Promise<void> {
   const passes = layer ? [layer] : [];
   if (needOcr && (text.trim() || !layer)) passes.push({ text, words });
 
-  // Second look: when the image clearly reads as a Romanian ID but the CNP —
-  // the field a marginal, scale-dependent read loses most often — came back
-  // empty, retry once at a deliberately different render scale and keep both
-  // passes. Best-effort: a retry failure must not drop the first pass.
+  // Second look: when the image clearly reads as a Romanian ID but the CNP
+  // came back empty, read it once more at a different scale and on the blue
+  // channel (see preprocessForOcr), and keep both passes. Best-effort: a retry failure must not drop the first pass.
   const firstDets = scan(text, scanConfig(settings));
   if (needOcr && needsSecondLook(firstDets, text, settings.enabled.national_id ?? true)) {
     secondPass = true;
@@ -883,7 +882,7 @@ function addTile(): HTMLElement {
 }
 
 // Wrap a detected face as a redaction region, so it lists, toggles, paints and
-// exports exactly like a text finding — hidden by default, since the portrait is
+// exports exactly like a text finding. It's hidden by default, since the portrait is
 // usually the most identifying thing on an ID.
 function faceRegion(hit: FaceHit): Region {
   return {
@@ -924,7 +923,7 @@ function scheduleThumbs(): void {
 
 // `fresh` marks a brand-new scan: only then do rows play their stagger-in
 // animation. Re-renders (toggling a region, changing a setting, undo) keep the
-// list still — replaying the entrance on every click reads as flicker.
+// list still, because replaying the entrance on every click reads as flicker.
 function renderRegions(fresh = false): void {
   const regions = regionsNow();
   const manualBoxes = manualNow();
@@ -968,7 +967,7 @@ function renderRegions(fresh = false): void {
   summary.textContent = parts.join(" · ");
 
   // Hand-drawn boxes count toward what's covered, but only detections feed the
-  // severity read-outs — a box isn't a "finding".
+  // severity read-outs; a box isn't a "finding".
   showDashboard(
     regions.map((r) => r.detection.severity),
     hiddenCount + manualBoxes.length,
@@ -982,7 +981,7 @@ function regionRow(region: Region, index: number, position: number): HTMLElement
   const el = hitRow({
     sev: d.severity,
     label: d.label,
-    // A face has no text to mask — show its size instead.
+    // A face has no text to mask, so show its size instead.
     value:
       d.category === "face"
         ? `${Math.round(region.boxes[0]?.w ?? 0)} × ${Math.round(region.boxes[0]?.h ?? 0)} px`
@@ -1012,8 +1011,8 @@ function toggle(index: number): void {
 }
 
 // ── Manual redaction ──
-// Drag anywhere on the image to cover a region the scan can't catch — an
-// address, a signature. Boxes are stored in image-pixel space so they survive
+// Drag anywhere on the image to cover a region the scan can't catch, like an
+// address or a signature. Boxes are stored in image-pixel space so they survive
 // the canvas being scaled to fit, and painted onto the canvas itself so the
 // saved PNG carries them.
 function pushManualHistory(): void {
@@ -1071,7 +1070,7 @@ function setHover(boxes: Box[] | null): void {
   repaint();
 }
 
-// Hold the Compare button to redraw the image without its redactions — a quick
+// Hold the Compare button to redraw the image without its redactions, for a quick
 // before/after. A press-and-hold button, not a slider, so it doesn't fight the
 // canvas's drag-to-redact gesture.
 compareBtn.addEventListener("pointerdown", (e) => {
@@ -1309,7 +1308,7 @@ canvas.addEventListener("pointerup", (e) => {
   drawbox.hidden = true;
   const start = drag;
   drag = null;
-  // Barely moved: a click, not a drag — toggle the finding under it.
+  // Barely moved: a click, not a drag, so toggle the finding under it.
   if (Math.hypot(e.clientX - start.cx, e.clientY - start.cy) < 4) {
     const hit = regionAt(regionsNow(), start.x, start.y);
     if (hit !== null) toggle(hit);
@@ -1374,7 +1373,7 @@ pasteBtn.addEventListener("click", async (e) => {
 fileInput.addEventListener("change", () => {
   void addImages([...(fileInput.files ?? [])]);
   // Clear the value so choosing the same file again (e.g. after Clear) still
-  // fires `change` — otherwise the picker sees no change and nothing loads.
+  // fires `change`; otherwise the picker sees no change and nothing loads.
   fileInput.value = "";
 });
 clearBtn.addEventListener("click", () => cur && closeDoc(cur));
@@ -1456,7 +1455,7 @@ copyBtn.addEventListener("click", async () => {
 rotateBtn.addEventListener("click", async () => {
   if (!cur) return;
   const doc = cur;
-  // Manual rotate is a deliberate 90° nudge — don't re-run the auto search.
+  // Manual rotate is a deliberate 90° nudge. Don't re-run the auto search.
   const rotated = await loadImageEl(orientedCanvas(doc.shown, 1).toDataURL("image/png"));
   doc.token++;
   Object.assign(doc, {
@@ -1668,7 +1667,7 @@ function showUpdateBanner(update: PendingUpdate): void {
       text.textContent = "Restarting…"; // the relaunch usually preempts this
     } catch (err) {
       console.error("Update failed", err);
-      text.textContent = "Update failed — download it from the releases page instead.";
+      text.textContent = "Update failed. Download it from the releases page instead.";
       action.disabled = false;
       action.textContent = "Retry";
       later.hidden = false;

@@ -8,14 +8,14 @@ export interface FaceHit {
 }
 
 // Lazy single load. A failed load resets so the next scan retries, the same way
-// the OCR worker does — a transient asset/memory hiccup shouldn't kill detection
+// the OCR worker does. A transient asset/memory hiccup shouldn't kill detection
 // until restart. TF.js picks its own backend (WebGL in the WebView, CPU as a
-// fallback); both are CSP-safe — neither needs eval or a network round-trip.
+// fallback); both are CSP-safe, and neither needs eval or a network round-trip.
 let ready: Promise<void> | null = null;
 function load(): Promise<void> {
   if (!ready) {
-    // Model is vendored locally (see scripts/copy-vendor.mjs) — nothing is
-    // fetched off the network, consistent with the offline/privacy guarantee.
+    // Model is vendored locally (see scripts/copy-vendor.mjs), so nothing is
+    // fetched off the network.
     ready = faceapi.nets.tinyFaceDetector.loadFromUri("/vendor/faceapi").catch((err) => {
       ready = null;
       throw err;

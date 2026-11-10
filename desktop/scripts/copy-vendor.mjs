@@ -1,5 +1,5 @@
 // Copy vendored runtime assets out of node_modules into public/ so Vite serves
-// them locally — OCR (tesseract.js) and face detection (face-api.js) both run
+// them locally. OCR (tesseract.js) and face detection (face-api.js) both run
 // fully offline, with nothing fetched at runtime. Runs on predev/prebuild.
 
 import { cpSync, mkdirSync } from "node:fs";
@@ -22,7 +22,7 @@ const coreDir = dirname(require.resolve("tesseract.js-core/package.json"));
 cpSync(coreDir, join(tess, "core"), { recursive: true });
 
 // ── face-api.js (face detection) ──
-// Only the tiny face detector and its weights — a frontal-face model that's
+// Only the tiny face detector and its weights: a frontal-face model that's
 // plenty for the portrait photo on an ID, at a fraction of the other models' size.
 const faces = join(vendor, "faceapi");
 mkdirSync(faces, { recursive: true });

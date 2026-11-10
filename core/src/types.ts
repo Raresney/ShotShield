@@ -1,4 +1,4 @@
-// Core domain types for the detection engine. Pure types — erased at run time.
+// Core domain types for the detection engine. Pure types, erased at run time.
 // The Category union grows as detectors are added.
 
 export type Category =
@@ -43,7 +43,7 @@ export interface Detection {
   redactByDefault: boolean;
 }
 
-/** A user-defined rule. Regex is intentional here — it comes from the user. */
+/** A user-defined rule. Regex is intentional here: it comes from the user. */
 export interface CustomRule {
   id: string;
   label: string;

@@ -1,7 +1,7 @@
 // Checksum validators used by the detector table to cut false positives.
 // Each takes the raw string and returns whether the checksum holds up.
 
-/** Luhn (mod 10) — credit cards and a few other numbers. */
+/** Luhn (mod 10), for credit cards and a few other numbers. */
 export function luhn(digits: string): boolean {
   if (!/^\d+$/.test(digits)) return false;
   let sum = 0;
@@ -35,7 +35,7 @@ export function ibanValid(iban: string): boolean {
 }
 
 /**
- * Romanian CUI/CIF fiscal code: 2–10 digits (an optional RO prefix is ignored),
+ * Romanian CUI/CIF fiscal code: 2 to 10 digits (an optional RO prefix is ignored),
  * last digit is the control. Weights are the 753217532 key, right-aligned to the
  * body; sum × 10 mod 11, with 10 folding to 0.
  */
@@ -70,7 +70,7 @@ const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 const BECH32_GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
 
 /**
- * Bech32 / bech32m checksum (BIP-173, BIP-350) — native SegWit and Taproot
+ * Bech32 / bech32m checksum (BIP-173, BIP-350) for native SegWit and Taproot
  * Bitcoin addresses. Mixed case is invalid by spec.
  */
 export function bech32Valid(addr: string): boolean {
@@ -98,7 +98,7 @@ export function bech32Valid(addr: string): boolean {
 
 /**
  * A public, routable IPv4 address. Private, loopback, link-local, CGNAT,
- * multicast and reserved ranges are rejected — they reveal nothing about who
+ * multicast and reserved ranges are rejected. They reveal nothing about who
  * took the screenshot and would flood a dev screenshot with noise.
  */
 export function publicIpv4(ip: string): boolean {

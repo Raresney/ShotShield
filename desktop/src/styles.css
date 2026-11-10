@@ -1,6 +1,6 @@
-/* ShotShield — desktop UI.
+/* ShotShield desktop UI.
    Two panes (workspace + inspector), a settings drawer, dark by default.
-   Fonts are bundled (Inter, JetBrains Mono) — nothing loads from the network. */
+   Fonts are bundled (Inter, JetBrains Mono); nothing loads from the network. */
 
 /* ── Tokens ───────────────────────────────────── */
 :root {

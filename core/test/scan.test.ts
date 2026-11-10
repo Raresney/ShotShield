@@ -149,7 +149,7 @@ test("a Luhn-valid CNP is a national ID, not a payment card", () => {
 
 test("redacts a CNP behind its label even when OCR splits the digits", () => {
   // A phone photo often breaks the 13-digit run with stray spaces; anchored on
-  // the printed "CNP" label we stitch it back together. The strict pass can't —
+  // the printed "CNP" label we stitch it back together. The strict pass can't:
   // it needs 13 contiguous digits.
   const dets = scan("CNP 196020 9025813");
   assert.equal(dets.length, 1);
@@ -159,7 +159,7 @@ test("redacts a CNP behind its label even when OCR splits the digits", () => {
 test("redacts a CNP whose control digit a misread has broken, label or not", () => {
   // 1960209025811 fails the checksum (the real number ends in 3) but its embedded
   // date and county still read true. We redact it on the strength of that structure
-  // rather than leave an ID number in the clear over a single OCR typo — whether or
+  // rather than leave an ID number in the clear over a single OCR typo, whether or
   // not a "CNP" label survived the photo.
   const bare = scan("1960209025811");
   assert.equal(bare.length, 1);
@@ -188,7 +188,7 @@ test("ignores a bare 13-digit run with no valid CNP date", () => {
 test("redacts a CNP glued to its label with a broken control digit", () => {
   // "CNP1960209025811": OCR dropped the gap *and* flipped a digit. The strict run
   // rejects the bad checksum, and a label anchor that demands a word boundary after
-  // "CNP" can't see a number fused onto it — so only the loosened anchor catches it.
+  // "CNP" can't see a number fused onto it, so only the loosened anchor catches it.
   const dets = scan("CNP1960209025811");
   assert.equal(dets.length, 1);
   assert.equal(dets[0]!.category, "national_id");
@@ -226,14 +226,14 @@ test("redacts a split CNP even when a misread broke the control digit", () => {
 });
 
 test("ignores two adjacent numbers that don't join into a valid CNP", () => {
-  // 13 digits across the gap, but the embedded month (45) is out of range — so
+  // 13 digits across the gap, but the embedded month (45) is out of range, so
   // ordinary number pairs in logs and forms aren't glued into a false CNP.
   assert.deepEqual(scan("comanda 12345 67890123 livrata"), []);
 });
 
 test("redacts a CNP that OCR split into three word boxes", () => {
   // The lead digit often sits apart from the rest (a hologram crosses it), so
-  // the rebuilt text reads "1 960209 025813" — three boxes, no label in reach.
+  // the rebuilt text reads "1 960209 025813": three boxes, no label in reach.
   const dets = scan("identitate 1 960209 025813 valabil");
   assert.equal(dets.length, 1);
   assert.equal(dets[0]!.category, "national_id");
@@ -252,7 +252,7 @@ test("redacts a CNP whose kerning gap OCR read as a dash or a dot", () => {
 
 test("redacts a CNP whose halves landed on different OCR lines", () => {
   // Word boxes on slightly different baselines get rebuilt as separate lines,
-  // so the gap is a newline no single-line pass can cross — labelled or not.
+  // so the gap is a newline no single-line pass can cross, labelled or not.
   for (const text of ["CNP 1960209\n025813", "act 1960209\n025813 emis"]) {
     const dets = scan(text);
     assert.equal(dets.length, 1, JSON.stringify(text));
@@ -262,7 +262,7 @@ test("redacts a CNP whose halves landed on different OCR lines", () => {
 
 test("redacts a CNP whose lead digit split off on its own", () => {
   // "1 960209025813": a single stray character is a valid OCR word, so the
-  // stitch accepts a one-digit run — the old two-digit floor left this bare.
+  // stitch accepts a one-digit run; the old two-digit floor left this bare.
   const dets = scan("identitate 1 960209025813 valabil");
   assert.equal(dets.length, 1);
   assert.equal(dets[0]!.category, "national_id");
@@ -270,7 +270,7 @@ test("redacts a CNP whose lead digit split off on its own", () => {
 
 test("redacts a foreign-national CNP (lead digit 9) on structure alone", () => {
   // Pre-2022 foreign nationals carry a 9-led CNP. With the checksum broken by
-  // a misread, only the structural pass is left — it must not stop at 8.
+  // a misread, only the structural pass is left, and it must not stop at 8.
   const dets = scan("cnp strain 9960209025813 inregistrat");
   assert.equal(dets.length, 1);
   assert.equal(dets[0]!.category, "national_id");
@@ -280,7 +280,7 @@ test("a labelled CNP never swallows the digits on the next line", () => {
   // Two CNP renders on adjacent lines, label on the first. If the label pass
   // could cross the newline its greedy span would eat the second line's lead
   // digits, and that over-long hit would shadow the second line's own
-  // detection in overlap resolution — leaving its tail exposed on the export.
+  // detection in overlap resolution, leaving its tail exposed on the export.
   const dets = scan("CNP 1960209-025813\n1 960209 025813");
   assert.equal(dets.length, 2);
   for (const d of dets) {
@@ -291,16 +291,16 @@ test("a labelled CNP never swallows the digits on the next line", () => {
 
 test("ignores dates, times and grouped amounts near the split-CNP pass", () => {
   // Dotted dates and thousands-grouped sums are the separator shapes the
-  // widened stitch walks over — digit count or the embedded date rejects them.
+  // widened stitch walks over; digit count or the embedded date rejects them.
   assert.deepEqual(scan("plata din 14.07.2026 la 15:30"), []);
   assert.deepEqual(scan("total 1.234.567 lei"), []);
   // A column of order numbers joins to 13 digits across the newline, but the
-  // embedded month (45) is out of range — vertical neighbours don't glue.
+  // embedded month (45) is out of range, so vertical neighbours don't glue.
   assert.deepEqual(scan("comenzi:\n12345\n67890123\ngata"), []);
 });
 
 test("detects the name line of an ID machine-readable zone", () => {
-  // surname<<given-names, padded with `<` — a TD1/TD3 MRZ name line.
+  // surname<<given-names, padded with `<`: a TD1/TD3 MRZ name line.
   const dets = scan("POPESCU<<ION<<<<<<<<<<<<<<<<<<");
   assert.equal(dets.length, 1);
   assert.equal(dets[0]!.category, "mrz");

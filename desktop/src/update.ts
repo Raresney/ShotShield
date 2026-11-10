@@ -21,7 +21,7 @@ export async function checkForUpdate(): Promise<PendingUpdate | null> {
     update = await check();
   } catch (err) {
     // No network, no published manifest yet, or no Tauri IPC (browser dev). All
-    // fine — just don't surface an update.
+    // fine; just don't surface an update.
     console.warn("Update check skipped:", err);
     return null;
   }

@@ -16,7 +16,7 @@ dist-ssr/
 
 # ───── Tesseract OCR runtime (desktop) ─────
 # Worker + wasm core are copied from node_modules on predev/prebuild.
-# Only the language model is committed — it isn't an npm package.
+# Only the language model is committed; it isn't an npm package.
 /desktop/public/vendor/tesseract/*
 !/desktop/public/vendor/tesseract/lang/
 
