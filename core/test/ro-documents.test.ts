@@ -57,6 +57,9 @@ test("the second MRZ line as OCR reads it off a photo", () => {
   assert.deepEqual(hits(spaced, "mrz"), [spaced]);
   const slipped = "ZZ123456<1ROU95O3124F3O1O15024012313";
   assert.deepEqual(hits(slipped, "mrz"), [slipped]);
+  // And the other way round: a zero read for the O of ROU.
+  const zero = "ZZ123456<1R0U9503124F301015024012313";
+  assert.deepEqual(hits(zero, "mrz"), [zero]);
 });
 
 test("the second MRZ line of a passport and of a credit-card-sized ID", () => {

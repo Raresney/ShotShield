@@ -386,14 +386,15 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // document number, a check digit and the nationality, then birth date + check,
   // sex, expiry + check (TD2/TD3); or, on a credit-card-sized ID (TD1), the
   // dates first and the nationality after them. OCR splits the line with
-  // spaces and reads 0 as O, so both are allowed; the two dates must be real
-  // calendar dates, which is what keeps an ordinary uppercase run out.
+  // spaces and swaps 0 and O ("R0U" for ROU), so both are allowed; the two
+  // dates must be real calendar dates, which is what keeps an ordinary
+  // uppercase run out.
   { category: "mrz", label: "ID machine-readable zone", severity: "critical",
-    source: `(?<![A-Z0-9<])(?:[A-Z0-9<] ?){9}[0-9O<] ?(?:[A-Z<] ?){3}(?:${MRZ_DIGIT} ?){7}[MFX<] ?(?:${MRZ_DIGIT} ?){6}${MRZ_DIGIT}(?: ?[A-Z0-9<]){0,16}(?![A-Z0-9<])`,
+    source: `(?<![A-Z0-9<])(?:[A-Z0-9<] ?){9}[0-9O<] ?(?:[A-Z0<] ?){3}(?:${MRZ_DIGIT} ?){7}[MFX<] ?(?:${MRZ_DIGIT} ?){6}${MRZ_DIGIT}(?: ?[A-Z0-9<]){0,16}(?![A-Z0-9<])`,
     baseConfidence: 0.9,
     refine: (raw) => (mrzDatesValid(raw.replace(/ /g, ""), 13, 21) ? {} : false) },
   { category: "mrz", label: "ID machine-readable zone", severity: "critical",
-    source: `(?<![A-Z0-9<])(?:${MRZ_DIGIT} ?){7}[MFX<] ?(?:${MRZ_DIGIT} ?){7}(?:[A-Z<] ?){3}(?:[A-Z0-9<] ?){0,11}[A-Z0-9<](?![A-Z0-9<])`,
+    source: `(?<![A-Z0-9<])(?:${MRZ_DIGIT} ?){7}[MFX<] ?(?:${MRZ_DIGIT} ?){7}(?:[A-Z0<] ?){3}(?:[A-Z0-9<] ?){0,11}[A-Z0-9<](?![A-Z0-9<])`,
     baseConfidence: 0.9,
     refine: (raw) => (mrzDatesValid(raw.replace(/ /g, ""), 0, 8) ? {} : false) },
 
