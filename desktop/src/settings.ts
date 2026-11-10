@@ -164,7 +164,7 @@ export function captureShortcut(ua = navigator.userAgent): string {
   return keys[0] === "⌃" ? keys.join("") : keys.join("+");
 }
 
-/** What the Background section needs from the app shell (Windows and macOS). */
+/** What the Background section needs from the app shell (the desktop app only). */
 export interface BackgroundHooks {
   setTray(on: boolean): void;
   autostart: boolean;

@@ -867,6 +867,7 @@ dependencies = [
  "tauri-plugin-updater",
  "windows",
  "xcap",
+ "zbus",
 ]
 
 [[package]]

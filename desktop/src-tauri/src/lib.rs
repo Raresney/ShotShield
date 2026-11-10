@@ -1,13 +1,15 @@
-#[cfg(capture)]
+#[cfg(desktop)]
 mod capture;
 #[cfg(windows)]
 mod ocr;
-#[cfg(capture)]
+#[cfg(target_os = "linux")]
+mod portal;
+#[cfg(desktop)]
 mod tray;
 
 /// Start a screen capture off the calling thread; a failure is reported to the
 /// main window, which says so if nothing else is on screen.
-#[cfg(capture)]
+#[cfg(desktop)]
 pub(crate) fn start_capture(app: tauri::AppHandle) {
     use tauri::{Emitter, Manager};
     std::thread::spawn(move || {
@@ -20,9 +22,9 @@ pub(crate) fn start_capture(app: tauri::AppHandle) {
 }
 
 /// The capture shortcut as the tray menu shows it.
-#[cfg(all(capture, target_os = "macos"))]
+#[cfg(all(desktop, target_os = "macos"))]
 pub(crate) const SHORTCUT_LABEL: &str = "⌃⌥R";
-#[cfg(all(capture, not(target_os = "macos")))]
+#[cfg(all(desktop, not(target_os = "macos")))]
 pub(crate) const SHORTCUT_LABEL: &str = "Ctrl+Alt+R";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -40,10 +42,11 @@ pub fn run() {
             .plugin(tauri_plugin_fs::init());
     }
 
-    // Screen capture (Windows and macOS, see build.rs). Ctrl+Alt+R
-    // (Control+Option+R on a Mac) works system-wide, even with ShotShield in
-    // the background, and the tray keeps it running with the window closed.
-    #[cfg(capture)]
+    // Screen capture. Ctrl+Alt+R (Control+Option+R on a Mac) works
+    // system-wide, even with ShotShield in the background, and the tray keeps
+    // it running with the window closed. Wayland doesn't let an app grab a
+    // global shortcut, so there it's the capture button and the tray menu.
+    #[cfg(desktop)]
     {
         use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
 
@@ -80,7 +83,7 @@ pub fn run() {
             tray::set_autostart,
         ]);
     }
-    #[cfg(all(capture, not(windows)))]
+    #[cfg(all(desktop, not(windows)))]
     {
         builder = builder.invoke_handler(tauri::generate_handler![
             capture::capture_start,
@@ -99,13 +102,14 @@ pub fn run() {
             use tauri::Manager;
             // The main window starts hidden (see tauri.conf.json) so a start at
             // login can stay in the tray; every other start shows it here.
-            #[cfg_attr(not(capture), allow(unused_mut))]
-            let mut to_tray = cfg!(capture) && std::env::args().any(|a| a == "--hidden");
-            #[cfg(capture)]
+            #[cfg_attr(not(desktop), allow(unused_mut))]
+            let mut to_tray = cfg!(desktop) && std::env::args().any(|a| a == "--hidden");
+            #[cfg(desktop)]
             {
                 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
-                // Another app may own the combination already; the in-app
-                // Capture button still works, so don't fail startup over it.
+                // Another app may own the combination already (or, on Wayland,
+                // the compositor refuses it); the in-app Capture button still
+                // works, so don't fail startup over it.
                 let hotkey = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyR);
                 if let Err(e) = app.global_shortcut().register(hotkey) {
                     eprintln!("ShotShield: couldn't register {SHORTCUT_LABEL}: {e}");
