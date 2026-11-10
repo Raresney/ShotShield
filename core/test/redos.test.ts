@@ -31,6 +31,9 @@ const adversarial: Record<string, string> = {
   // MRZ: a wall of fillers and uppercase, the `<<`-anchored rule's worst case.
   "mrz fillers": "<".repeat(N),
   "mrz uppercase": "A".repeat(N) + "<<" + "B".repeat(N),
+  // The fixed-field MRZ line rules, on spaced uppercase and digit tokens.
+  "mrz spaced line": "A1 ".repeat(N),
+  "mrz date fields": "ZZ123456<1ROU 9503124F ".repeat(N / 20),
   // Long digit runs feed the card / CNP / phone passes at once.
   "digit run": "1".repeat(N),
   // Separator-joined short tokens hammer the split-CNP multi-run pass — one

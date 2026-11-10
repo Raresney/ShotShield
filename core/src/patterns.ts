@@ -44,6 +44,19 @@ function cnpStructValid(d: string): boolean {
   return month >= 1 && month <= 12 && day >= 1 && day <= 31 && county >= 1 && county <= 52;
 }
 
+// A digit in an MRZ date field, or a letter OCR reads in its place.
+const MRZ_DIGIT = "[0-9OQDIZSB]";
+
+// The YYMMDD dates at `a` and `b` in a space-free MRZ line are real dates.
+function mrzDatesValid(line: string, a: number, b: number): boolean {
+  return [a, b].every((at) => {
+    const d = unconfuseDigits(line.slice(at, at + 6));
+    const month = +d.slice(2, 4);
+    const day = +d.slice(4, 6);
+    return d.length === 6 && month >= 1 && month <= 12 && day >= 1 && day <= 31;
+  });
+}
+
 function cardBrand(d: string): string {
   if (/^4\d{12,18}$/.test(d)) return "Visa card";
   if (/^(5[1-5]\d{14}|2(22[1-9]|2[3-9]\d|[3-6]\d\d|7[01]\d|720)\d{12})$/.test(d)) return "Mastercard";
@@ -365,6 +378,25 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
       const strong = /ROU/.test(raw) || /^[IPAC]</.test(raw);
       return { confidence: strong ? 0.96 : 0.85 };
     } },
+
+  // The other MRZ line. On an ID card or passport it is mostly digits with a
+  // single "<" (or none), so the "<<" run above never fires on it, yet it holds
+  // the birth date, sex and expiry and, on the older Romanian ID, the first and
+  // last six digits of the CNP. It is found by its fixed fields instead: the
+  // document number, a check digit and the nationality, then birth date + check,
+  // sex, expiry + check (TD2/TD3); or, on a credit-card-sized ID (TD1), the
+  // dates first and the nationality after them. OCR splits the line with
+  // spaces and swaps 0 and O ("R0U" for ROU), so both are allowed; the two
+  // dates must be real calendar dates, which is what keeps an ordinary
+  // uppercase run out.
+  { category: "mrz", label: "ID machine-readable zone", severity: "critical",
+    source: `(?<![A-Z0-9<])(?:[A-Z0-9<] ?){9}[0-9O<] ?(?:[A-Z0<] ?){3}(?:${MRZ_DIGIT} ?){7}[MFX<] ?(?:${MRZ_DIGIT} ?){6}${MRZ_DIGIT}(?: ?[A-Z0-9<]){0,16}(?![A-Z0-9<])`,
+    baseConfidence: 0.9,
+    refine: (raw) => (mrzDatesValid(raw.replace(/ /g, ""), 13, 21) ? {} : false) },
+  { category: "mrz", label: "ID machine-readable zone", severity: "critical",
+    source: `(?<![A-Z0-9<])(?:${MRZ_DIGIT} ?){7}[MFX<] ?(?:${MRZ_DIGIT} ?){7}(?:[A-Z0<] ?){3}(?:[A-Z0-9<] ?){0,11}[A-Z0-9<](?![A-Z0-9<])`,
+    baseConfidence: 0.9,
+    refine: (raw) => (mrzDatesValid(raw.replace(/ /g, ""), 0, 8) ? {} : false) },
 
   // Romanian ID card series + number, e.g. "SERIA RK NR 123456". Anchored on the
   // printed "seria" label so a stray two-letters-plus-six-digits run elsewhere on
