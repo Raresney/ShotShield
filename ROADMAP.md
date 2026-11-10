@@ -7,10 +7,10 @@ Rough order, not dates. Built in the open, so this will move around.
 - [x] Desktop app on Windows, macOS and Linux: OCR, face detection, black or mosaic covers, batch mode, PDF in and out, signed auto-updates
 - [x] Screen capture with `Ctrl+Alt+R`, tray and start-at-login on Windows, macOS and Linux
 - [x] Romanian IDs read off a phone photo, CNP included, with names and addresses boxed line by line
-- [x] The Windows OCR engine read beside Tesseract
+- [x] The system OCR engine (Windows, and Vision on macOS) read beside Tesseract
 
 ### Next
-- [ ] Sharper OCR on hard photos, and the system OCR on macOS (Vision) too
+- [ ] Sharper OCR on hard photos
 - [ ] Authenticode-signed Windows installers (see [SIGNING](.github/SIGNING.md))
 
 ### Later

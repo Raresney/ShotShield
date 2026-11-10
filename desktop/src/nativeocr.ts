@@ -26,7 +26,7 @@ export function linesToResult(lines: NativeLine[]): OcrResult {
 }
 
 // Set once the system OCR turns out to be missing (a browser build, a platform
-// without one, a Windows install with no OCR language), so later images don't
+// without one such as Linux, a Windows install with no OCR language), so later images don't
 // ask again.
 let unavailable = false;
 
