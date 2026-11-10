@@ -33,6 +33,9 @@ const adversarial: Record<string, string> = {
   "mrz uppercase": "A".repeat(N) + "<<" + "B".repeat(N),
   // The fixed-field MRZ line rules, on spaced uppercase and digit tokens.
   "mrz spaced line": "A1 ".repeat(N),
+  // A card whose MRZ spells out a CNP, so the approximate search runs over a
+  // long line of digits and look-alikes.
+  "card cnp search": "ZZ123456<1ROU9503124F301015024012313\n" + "29503lZ4|0 ".repeat(N / 4),
   "mrz date fields": "ZZ123456<1ROU 9503124F ".repeat(N / 20),
   // Long digit runs feed the card / CNP / phone passes at once.
   "digit run": "1".repeat(N),

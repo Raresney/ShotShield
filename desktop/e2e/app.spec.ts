@@ -44,6 +44,22 @@ test("an image is read, covered, toggled and saved", async ({ page }) => {
   expect([...bytes.subarray(1, 4)].map((b) => String.fromCharCode(b)).join("")).toBe("PNG");
 });
 
+test("an ID card's CNP is covered through its MRZ even when misread", async ({ page }) => {
+  // A made-up card. The "#" stands in for a mark OCR reads inside the number,
+  // which no CNP pattern accepts; the card's MRZ still spells the CNP out.
+  const png = await screenshotPng(page, [
+    "ROMANIA CARTE DE IDENTITATE",
+    "CNP 2950312#401231",
+    "IDROUPOPESCU<<ANA<<<<<<<<<<<<<<<<<<<",
+    "ZZ123456<1ROU9503124F301015024012313",
+  ]);
+  await page.locator("#file").setInputFiles({ name: "card.png", mimeType: "image/png", buffer: png });
+  await expect(page.locator("#summary")).toHaveText(/^(\d+) of \1 covered$/, { timeout: 80_000 });
+  const labels = await page.locator("#results .hit-label").allTextContents();
+  expect(labels.filter((l) => l === "CNP (RO)")).toHaveLength(1);
+  expect(labels.filter((l) => l === "ID machine-readable zone")).toHaveLength(2);
+});
+
 test("a settings change keeps what was covered or uncovered by hand", async ({ page }) => {
   const png = await screenshotPng(page, [`Email: ${EMAIL}`, `IBAN: ${IBAN}`]);
   await page.locator("#file").setInputFiles({ name: "mixed.png", mimeType: "image/png", buffer: png });

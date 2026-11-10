@@ -3,6 +3,7 @@
 
 import type { CustomRule, Detection, ScanConfig, Severity } from "./types.ts";
 import { BUILTIN_PATTERNS } from "./patterns.ts";
+import { cnpsFromMrz, findApprox } from "./cardcnp.ts";
 
 interface CompiledRule {
   category: Detection["category"];
@@ -61,6 +62,9 @@ function compileCustom(r: CustomRule): CompiledRule {
   };
 }
 
+// How sure a CNP found through the card's own MRZ is: the value is known.
+const CARD_CNP_CONFIDENCE = 0.9;
+
 /** Scan text for sensitive data. Returns non-overlapping detections, in order. */
 export function scan(text: string, config?: ScanConfig): Detection[] {
   const rules = compile(config);
@@ -105,6 +109,26 @@ export function scan(text: string, config?: ScanConfig): Detection[] {
         confidence,
         redactByDefault: redactByDefault(rule.severity),
       });
+    }
+  }
+
+  // A CNP the card itself spells out in its MRZ: find the printed copy even
+  // when OCR mangled it past what the patterns undo.
+  if (config?.enabled?.national_id !== false && minConfidence <= CARD_CNP_CONFIDENCE) {
+    for (const cnp of cnpsFromMrz(text)) {
+      if (allowed(cnp)) continue;
+      for (const { start, end } of findApprox(text, cnp)) {
+        found.push({
+          category: "national_id",
+          label: "CNP (RO)",
+          severity: "high",
+          start,
+          end,
+          text: text.slice(start, end),
+          confidence: CARD_CNP_CONFIDENCE,
+          redactByDefault: true,
+        });
+      }
     }
   }
 
