@@ -45,6 +45,14 @@ export function orientedCanvas(src: Source, turns: number, maxDim = Infinity): H
 /** Which OCR render to prepare: the normal pass, or the second-look retry. */
 export type OcrLook = "first" | "second";
 
+/**
+ * The grey level OCR sees for one pixel: luma on the first look, the blue
+ * channel on the second (see preprocessForOcr).
+ */
+export function ocrGrey(r: number, g: number, b: number, look: OcrLook): number {
+  return look === "second" ? b : (r * 0.299 + g * 0.587 + b * 0.114) | 0;
+}
+
 /** Below this many grey levels, the stretch would only amplify noise. */
 const MIN_STRETCH_SPAN = 48;
 
@@ -59,6 +67,11 @@ const MIN_STRETCH_SPAN = 48;
  * differently from the first — small inputs push further up (3× toward 3600),
  * native-size photos resample down toward 2400 — so a retry sees genuinely new
  * pixel statistics instead of repeating the same miss.
+ *
+ * The second look also reads the blue channel instead of luma. The older
+ * Romanian ID prints its CNP over a tinted guilloche that luma turns into the
+ * same grey as the digits, so the whole line vanishes from the read; in the
+ * blue channel that background goes light and the digits stand out.
  *
  * Returns the prepared canvas and the `scale` applied, so word boxes read off it
  * divide cleanly back into the source image's pixel space. The original image is
@@ -89,7 +102,7 @@ export function preprocessForOcr(src: Source, look: OcrLook = "first"): { canvas
   const d = image.data;
   const hist = new Uint32Array(256);
   for (let i = 0; i < d.length; i += 4) {
-    const g = (d[i]! * 0.299 + d[i + 1]! * 0.587 + d[i + 2]! * 0.114) | 0;
+    const g = ocrGrey(d[i]!, d[i + 1]!, d[i + 2]!, look);
     d[i] = d[i + 1] = d[i + 2] = g;
     hist[g]!++;
   }
