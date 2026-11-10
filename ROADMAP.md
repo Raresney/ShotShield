@@ -11,7 +11,7 @@ Rough order, not dates. Built in the open, so this will move around.
 
 ### Next
 - [ ] Sharper OCR on hard photos, and the system OCR on macOS (Vision) too
-- [ ] Screen capture on Linux
+- [ ] Screen capture on Linux (#213)
 - [ ] Authenticode-signed Windows installers (see [SIGNING](.github/SIGNING.md))
 
 ### Later
