@@ -27,6 +27,54 @@ jobs:
       - run: npm test -w desktop
       - run: npm run build -w desktop
 
+  # The Rust side has code for each platform (capture, the tray, the Windows
+  # OCR), and the release is the only other place it gets built. Compile it on
+  # all three here so a break on one shows up in the PR, not at release time.
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, ubuntu-22.04, macos-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Same list as the release workflow: WebKitGTK for Tauri, then PipeWire,
+      # libclang, GBM/EGL and XCB for the screen capture.
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            libpipewire-0.3-dev \
+            libclang-dev \
+            libgbm-dev \
+            libegl-dev \
+            libxcb1-dev \
+            libxcb-randr0-dev
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      # The app embeds the built front end, so it has to exist to compile.
+      - run: npm ci
+      - run: npm run build -w desktop
+      - run: cargo check --locked
+        working-directory: desktop/src-tauri
+
   # The real flows in a browser: OCR, PDF, saving, settings. Slower, so it runs
   # beside the unit job rather than inside it.
   e2e:
