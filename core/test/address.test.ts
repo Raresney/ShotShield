@@ -35,3 +35,26 @@ test("an IP, email or wallet address label isn't a postal address", () => {
   assert.deepEqual(addresses("Email Address: ana at example dot com"), []);
   assert.deepEqual(addresses("Wallet address: see below please"), []);
 });
+
+test("an ID card's address lines: the county line and a street without nr.", () => {
+  // OCR glues "Str." to the street name and the card prints the flat details
+  // without a street number.
+  const card = "Domiciliu/Adresse/Address\nJud.CJ Mun.Cluj-Napoca\nStr.Lalelelor bl,12 sc.B et.3 ap.45\nEmisa de SPCLEP";
+  assert.deepEqual(addresses(card), ["Jud.CJ Mun.Cluj-Napoca", "Str.Lalelelor bl,12 sc.B et.3 ap.45"]);
+  assert.deepEqual(addresses("Loc nastere\nJud.IS Mun.Iasi"), ["Jud.IS Mun.Iasi"]);
+  assert.deepEqual(addresses("Jud. B Sector 3"), ["Jud. B Sector 3"]);
+  // A misread part ("Vt.3" for "et.3") doesn't stop the flat number after it.
+  assert.deepEqual(addresses("Str.Lalelelor bl,12 sc.B Vt.3 ap.45"), ["Str.Lalelelor bl,12 sc.B Vt.3 ap.45"]);
+});
+
+test("the trilingual address label isn't covered as if it were the address", () => {
+  // Whatever follows the label chain on its own line is noise off the card.
+  assert.deepEqual(addresses("Domiciliu/Adresse/Address \ A FOO) Bar"), []);
+});
+
+test("county and street shapes stay quiet outside an address", () => {
+  // Not a real county code, and a street word with a single flat detail.
+  assert.deepEqual(addresses("Jud.XY Mun.Nowhere"), []);
+  assert.deepEqual(addresses("Str.Lunga ap.4"), []);
+  assert.deepEqual(addresses("const s = StrConcat(a, b) + bl 4 ap 5"), []);
+});

@@ -106,6 +106,39 @@ const FORM_NAME_LABELS = [
 // A capitalised word's first letter, or the l OCR reads a capital I as.
 const CAP = "(?:\\p{Lu}|l(?=\\p{Ll}))";
 
+// A name-label fragment as OCR leaves it on a phone photo of an ID: case lost,
+// the slashes between the three languages gone, words glued together
+// ("NumelNom,'last name", "prenumePrenomFirst"). Matched anywhere in a line.
+// Sometimes only "Nom" and "name" survive ("NomotNôtn,'tast name"), so the
+// pair of them, in that order, counts too.
+const ID_NAME_LABEL = [
+  anyCase("nume"),
+  anyCase("pr") + "[EeÉé]" + anyCase("nom"),
+  anyCase("first") + " ?" + anyCase("name"),
+  anyCase("last") + " ?" + anyCase("name"),
+  anyCase("surname"),
+  "[Nn][OoÔô][Mm][^\\n]{0,20}" + anyCase("name"),
+].join("|");
+
+// Romanian county codes, as on number plates and ID addresses.
+const RO_COUNTY =
+  "AB|AG|AR|B|BC|BH|BN|BR|BT|BV|BZ|CJ|CL|CS|CT|CV|DB|DJ|GJ|GL|GR|HD|HR|IF|IL|IS|MH|MM|MS|NT|OT|PH|SB|SJ|SM|SV|TL|TM|TR|VL|VN|VS";
+
+// One block/stair/floor/flat part of a Romanian address: "bl. A3", "sc.B",
+// "et 2", "ap.45". OCR often turns the dot into a comma ("bl,12").
+const ADDR_PART = "(?:,?\\s*(?<!\\p{L})(?:[Bb]l|[Ss]c|[Ee]t|[Aa]p|BL|SC|ET|AP)[.,]?\\s*[A-Za-z0-9]{1,4})";
+// Carries on past a part OCR misread ("Vt.2" for "et.2") to the ones after it.
+// It needs the dot or comma, so ordinary words don't ride along.
+const ADDR_MORE = "(?:[ ,]+(?<!\\p{L})\\p{L}{1,3}[.,][ \\t]*[A-Za-z0-9]{1,4}(?![\\p{L}0-9])){0,3}";
+
+// A value made only of label words is the rest of a header ("NUME ȘI
+// PRENUME"), not a name.
+function notJustLabelWords(raw: string): false | { confidence: number } {
+  return raw.split(/[ -]/).every((w) => /^(?:NUME|PRENUME|NOM|PR[EÉ]NOM|SURNAME|LAST|FIRST|NAME|[ȘŞS]I|ET|AND)$/.test(w))
+    ? false
+    : { confidence: 0.6 };
+}
+
 // Placeholder values a form shows before anyone types.
 const NAME_PLACEHOLDERS = /^(?:John|Jane) Doe$|\b(?:Your|Full|First|Last|Enter|Name|Required|Optional|Example)\b/;
 
@@ -423,18 +456,33 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // Aleea…) then a capitalised name and "nr. 12", carrying the block/stair/
   // floor/flat parts that usually follow; or the English "12 Baker Street".
   // Both shapes need the street word AND a number, which prose rarely has.
+  // An ID card often prints no street number, only the flat parts, so two of
+  // those stand in for it. OCR can glue "Str." to the name, which is fine
+  // after a dot; without one a space is required, so "StrConcat" stays code.
   { category: "address", label: "Street address", severity: "medium",
-    source: "\\b(?:[Ss]tr(?:ada)?\\.?|STR\\.?|[Bb]d\\.?|BD\\.?|[Bb]ulevardul|B-dul|[Cc]alea|[ȘŞS]o[sșş](?:eaua)?\\.?|[Aa]leea|[Pp]ia[țţt]a|[Ss]plaiul|[Ii]ntr(?:area)?\\.?)\\s+[A-ZĂÂÎȘȚŞŢ0-9][\\p{L}0-9.'\\- ]{1,40}?,?\\s*(?:[Nn]r|NR)\\.?\\s*\\d{1,4}[A-Za-z]?(?:,?\\s*(?:[Bb]l|[Ss]c|[Ee]t|[Aa]p|BL|SC|ET|AP)\\.?\\s*[A-Za-z0-9]{1,4}){0,4}",
+    source:
+      "\\b(?:[Ss]tr(?:ada)?\\.?|STR\\.?|[Bb]d\\.?|BD\\.?|[Bb]ulevardul|B-dul|[Cc]alea|[ȘŞS]o[sșş](?:eaua)?\\.?|[Aa]leea|[Pp]ia[țţt]a|[Ss]plaiul|[Ii]ntr(?:area)?\\.?)(?:(?<=\\.)\\s*|\\s+)[A-ZĂÂÎȘȚŞŢ0-9][\\p{L}0-9.'\\- ]{1,40}?(?:,?\\s*(?:[Nn]r|NR)\\.?\\s*\\d{1,4}[A-Za-z]?" +
+      ADDR_PART + "{0,4}|" + ADDR_PART + "{2,4})" + ADDR_MORE,
     flags: "u", baseConfidence: 0.85 },
   { category: "address", label: "Street address", severity: "medium",
     source: "\\b\\d{1,5}\\s+(?:[A-Z][a-z]+\\s){1,3}(?:Street|St\\.|Avenue|Ave\\.|Road|Rd\\.|Boulevard|Blvd\\.|Lane|Ln\\.|Drive|Dr\\.|Way|Court|Ct\\.|Place|Pl\\.)(?![A-Za-z])",
     baseConfidence: 0.8 },
+  // The county line of a Romanian address or birthplace: "Jud.CJ Mun.Cluj-
+  // Napoca", "Jud. B Sector 3". Only the real county codes count, then up to
+  // two municipality/town/commune/village/sector parts on the same line.
+  { category: "address", label: "Address", severity: "medium",
+    source:
+      "\\b[Jj]ud\\.?\\s*(?:" + RO_COUNTY + ")(?![A-Za-z])(?:[ ,.]*(?:Mun|MUN|Ora[sșş]|ORA[SȘŞ]|Or[sșş]|Com|COM|Sat|SAT|Sect(?:or)?|SECT(?:OR)?)\\.?[ \\t]*[\\p{L}0-9][\\p{L}0-9.'\\-]*(?: [\\p{L}0-9][\\p{L}0-9.'\\-]*){0,3}){0,2}",
+    flags: "u", baseConfidence: 0.75 },
   // Whatever follows an address label, to the end of its line: the buletin's
   // "Domiciliu", a form's "Adresa:" or "Address:". The label is the evidence,
   // so the value only needs to look like more than one word with a letter.
+  // The older ID's trilingual "Domiciliu/Adresse/Address" is a header with the
+  // address on the lines below (the county and street rules take those), so
+  // neither the chain nor what trails it on a photo counts as the value.
   { category: "address", label: "Address", severity: "medium",
     // "IP address", "Email address" and the like are someone else's field.
-    source: "(?<=(?<!(?:IP|MAC|[Ee]-?[Mm]ail|[Ww]allet|[Ss]erver|[Ww]eb|URL)\\s)\\b(?:[Aa]dres[aă](?:\\sde\\sdomiciliu)?|ADRES[AĂ]|[Dd]omiciliu(?:l)?|DOMICILIU|[Aa]ddress|ADDRESS|[Hh]ome\\saddress)\\s?[:/]?\\s{0,3})(?=[^\\n]{0,80}\\p{L})[^\\s:][^\\n]{4,79}",
+    source: "(?<=(?<!(?:IP|MAC|[Ee]-?[Mm]ail|[Ww]allet|[Ss]erver|[Ww]eb|URL)\\s)(?<!/)\\b(?:[Aa]dres[aă](?:\\sde\\sdomiciliu)?|ADRES[AĂ]|[Dd]omiciliu(?:l)?|DOMICILIU|[Aa]ddress|ADDRESS|[Hh]ome\\saddress)\\s?[:/]?\\s{0,3})(?!/|[Aa]dres|ADRES|[Aa]ddress|ADDRESS)(?=[^\\n]{0,80}\\p{L})[^\\s:][^\\n]{4,79}",
     flags: "u", baseConfidence: 0.75,
     refine: (raw) => {
       const v = raw.trim();
@@ -462,14 +510,18 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // regex, so it's out of scope.
   { category: "name", label: "Name", severity: "high",
     source:
-      "(?<=\\b(?:NUME|Nume|PRENUME|Prenume|NOM|Nom|PR[EÉ]NOM|Pr[eé]nom|LAST NAME|Last name|FIRST NAME|First name|SURNAME|Surname)\\b[\\s:/]{0,3})[A-ZĂÂÎȘȚŞŢ]{2,}(?:[ -][A-ZĂÂÎȘȚŞŢ]{2,}){0,2}",
+      "(?<=\\b(?:NUME|Nume|PRENUME|Prenume|NOM|Nom|PR[EÉ]NOM|Pr[eé]nom|LAST NAME|Last name|FIRST NAME|First name|SURNAME|Surname)\\b(?:[ \\t:/]{0,3}|[ \\t:/]{0,2}\\n[ \\t]{0,2}))[A-ZĂÂÎȘȚŞŢ]{2,}(?:[ -][A-ZĂÂÎȘȚŞŢ]{2,}){0,2}",
     baseConfidence: 0.6,
-    // A value made only of label words is the rest of a header ("NUME ȘI
-    // PRENUME"), not a name.
-    refine: (raw) =>
-      raw.split(/[ -]/).every((w) => /^(?:NUME|PRENUME|NOM|PR[EÉ]NOM|SURNAME|LAST|FIRST|NAME|[ȘŞS]I|ET|AND)$/.test(w))
-        ? false
-        : { confidence: 0.6 } },
+    refine: notJustLabelWords },
+
+  // The same name on the line under its label, read the way OCR leaves an ID
+  // photo: the label line only has to contain a name-label fragment, and the
+  // value has to be the whole next line, in capitals, one to three words.
+  { category: "name", label: "Name", severity: "high",
+    source:
+      "(?<=^[^\\n]{0,40}(?:" + ID_NAME_LABEL + ")[^\\n]{0,40}\\n[ \\t]{0,2})[A-ZĂÂÎȘȚŞŢ]{2,}(?:[ -][A-ZĂÂÎȘȚŞŢ]{2,}){0,2}(?=[ \\t]*$)",
+    flags: "mu", baseConfidence: 0.6,
+    refine: notJustLabelWords },
 
   // A person's name behind a form or receipt label: "Name: Ana Popescu",
   // "Cardholder: Ion Ionescu", "Titular cont: Maria Pop". The colon is required

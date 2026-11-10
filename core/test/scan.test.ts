@@ -456,3 +456,20 @@ test("allow entries are literal apart from *, and a bare * allows nothing", () =
   // A lone star would hide everything; it's ignored instead.
   assert.equal(scan("ana@acme.com", { allow: ["*", "**"] }).length, 1);
 });
+
+test("redacts an ID card name printed on the line under its label", () => {
+  const names = (text: string) => scan(text).filter((d) => d.category === "name").map((d) => d.text);
+  // OCR reads the trilingual labels mangled: lowercase, slashes lost, words glued.
+  assert.deepEqual(names("CNP 2950312401231\nNumelNom,'last name\nPOPESCU\nprenumePrenomFirst\nANA MARIA\nCetatenie"), ["POPESCU", "ANA MARIA"]);
+  assert.deepEqual(names("Nume/Nom/Last name\nIONESCU-POP"), ["IONESCU-POP"]);
+  // Only "Nom" and "name" survived the read.
+  assert.deepEqual(names("NomotNôtn,'tast name\nPOPESCU"), ["POPESCU"]);
+});
+
+test("an uppercase line under an unrelated line is not a name", () => {
+  const names = (text: string) => scan(text).filter((d) => d.category === "name").map((d) => d.text);
+  assert.deepEqual(names("Build output\nWARNING DEPRECATED"), []);
+  assert.deepEqual(names("Nume/Nom/Last name\nPRENUME"), []);
+  // The label must sit right above: a name field further down is something else.
+  assert.deepEqual(names("Last name\n\nREADME"), []);
+});
