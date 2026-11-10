@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { customRules, loadSettings, scanConfig } from "../src/settings.ts";
+import { captureKeys, captureShortcut, customRules, loadSettings, scanConfig } from "../src/settings.ts";
 import { scan } from "@shotshield/core";
 
 beforeEach(() => localStorage.clear());
@@ -87,5 +87,21 @@ describe("user rules", () => {
     const s = loadSettings();
     expect(s.allow).toEqual(["ok"]);
     expect(s.rules).toHaveLength(1);
+  });
+});
+
+describe("capture shortcut labels", () => {
+  const mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+  const win = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edg/131.0";
+  const linux = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+
+  it("writes Control+Option+R the Mac way", () => {
+    expect(captureKeys(mac)).toEqual(["⌃", "⌥", "R"]);
+    expect(captureShortcut(mac)).toBe("⌃⌥R");
+  });
+
+  it("writes Ctrl+Alt+R everywhere else", () => {
+    expect(captureShortcut(win)).toBe("Ctrl+Alt+R");
+    expect(captureShortcut(linux)).toBe("Ctrl+Alt+R");
   });
 });

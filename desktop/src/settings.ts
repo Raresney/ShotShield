@@ -59,9 +59,9 @@ export interface Settings {
   minConfidence: number;
   /** How a covered region is drawn on the image. */
   cover: CoverStyle;
-  /** Closing the window keeps ShotShield in the tray (Windows). */
+  /** Closing the window keeps ShotShield in the tray. */
   tray: boolean;
-  /** Put a capture on the clipboard as soon as it's covered (Windows). */
+  /** Put a capture on the clipboard as soon as it's covered. */
   copyCaptures: boolean;
   /** Values never covered, one glob each ("*" = anything). */
   allow: string[];
@@ -153,7 +153,18 @@ export function validRegex(pattern: string): boolean {
   }
 }
 
-/** What the Background section needs from the app shell (Windows only). */
+/** The capture shortcut's keys, written the way this platform writes them. */
+export function captureKeys(ua = navigator.userAgent): string[] {
+  return /Macintosh|Mac OS X/.test(ua) ? ["⌃", "⌥", "R"] : ["Ctrl", "Alt", "R"];
+}
+
+/** The capture shortcut as one label: "Ctrl+Alt+R", or "⌃⌥R" on a Mac. */
+export function captureShortcut(ua = navigator.userAgent): string {
+  const keys = captureKeys(ua);
+  return keys[0] === "⌃" ? keys.join("") : keys.join("+");
+}
+
+/** What the Background section needs from the app shell (Windows and macOS). */
 export interface BackgroundHooks {
   setTray(on: boolean): void;
   autostart: boolean;
@@ -316,7 +327,7 @@ function backgroundGroup(s: Settings, commit: () => void, hooks: BackgroundHooks
   const section = group("Background");
   const note = document.createElement("p");
   note.className = "set-note";
-  note.textContent = "Keep Ctrl+Alt+R ready with the window closed.";
+  note.textContent = `Keep ${captureShortcut()} ready with the window closed.`;
   section.append(
     note,
     toggle("Keep running in the tray", s.tray, (on) => {
@@ -324,7 +335,7 @@ function backgroundGroup(s: Settings, commit: () => void, hooks: BackgroundHooks
       hooks.setTray(on);
       commit();
     }),
-    toggle("Start with Windows", hooks.autostart, (on) => {
+    toggle("Start at login", hooks.autostart, (on) => {
       hooks.autostart = on;
       void hooks.setAutostart(on);
     }),

@@ -1,13 +1,13 @@
-#[cfg(windows)]
+#[cfg(capture)]
 mod capture;
 #[cfg(windows)]
 mod ocr;
-#[cfg(windows)]
+#[cfg(capture)]
 mod tray;
 
 /// Start a screen capture off the calling thread; a failure is reported to the
 /// main window, which says so if nothing else is on screen.
-#[cfg(windows)]
+#[cfg(capture)]
 pub(crate) fn start_capture(app: tauri::AppHandle) {
     use tauri::{Emitter, Manager};
     std::thread::spawn(move || {
@@ -18,6 +18,12 @@ pub(crate) fn start_capture(app: tauri::AppHandle) {
         }
     });
 }
+
+/// The capture shortcut as the tray menu shows it.
+#[cfg(all(capture, target_os = "macos"))]
+pub(crate) const SHORTCUT_LABEL: &str = "⌃⌥R";
+#[cfg(all(capture, not(target_os = "macos")))]
+pub(crate) const SHORTCUT_LABEL: &str = "Ctrl+Alt+R";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -34,11 +40,10 @@ pub fn run() {
             .plugin(tauri_plugin_fs::init());
     }
 
-    // Screen capture (Windows for now: the Linux backend needs PipeWire, which
-    // the release runner doesn't build against). Ctrl+Alt+R works system-wide,
-    // even with ShotShield in the background, and the tray keeps it running
-    // with the window closed.
-    #[cfg(windows)]
+    // Screen capture (Windows and macOS, see build.rs). Ctrl+Alt+R
+    // (Control+Option+R on a Mac) works system-wide, even with ShotShield in
+    // the background, and the tray keeps it running with the window closed.
+    #[cfg(capture)]
     {
         use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
 
@@ -56,35 +61,54 @@ pub fn run() {
                     .build(),
             )
             .plugin(tauri_plugin_autostart::Builder::new().arg(tray::HIDDEN_ARG).build())
-            .on_window_event(tray::on_window_event)
-            .invoke_handler(tauri::generate_handler![
-                capture::capture_start,
-                capture::capture_frame,
-                capture::capture_finish,
-                capture::capture_cancel,
-                capture::capture_take,
-                ocr::ocr_native,
-                tray::set_background,
-                tray::autostart_enabled,
-                tray::set_autostart,
-            ]);
+            .on_window_event(tray::on_window_event);
     }
 
-    builder
+    // The Windows OCR engine only exists on Windows; elsewhere the page asks
+    // for it once, gets "not found" and stops asking.
+    #[cfg(windows)]
+    {
+        builder = builder.invoke_handler(tauri::generate_handler![
+            capture::capture_start,
+            capture::capture_frame,
+            capture::capture_finish,
+            capture::capture_cancel,
+            capture::capture_take,
+            ocr::ocr_native,
+            tray::set_background,
+            tray::autostart_enabled,
+            tray::set_autostart,
+        ]);
+    }
+    #[cfg(all(capture, not(windows)))]
+    {
+        builder = builder.invoke_handler(tauri::generate_handler![
+            capture::capture_start,
+            capture::capture_frame,
+            capture::capture_finish,
+            capture::capture_cancel,
+            capture::capture_take,
+            tray::set_background,
+            tray::autostart_enabled,
+            tray::set_autostart,
+        ]);
+    }
+
+    let app = builder
         .setup(|app| {
             use tauri::Manager;
             // The main window starts hidden (see tauri.conf.json) so a start at
             // login can stay in the tray; every other start shows it here.
-            #[cfg_attr(not(windows), allow(unused_mut))]
-            let mut to_tray = cfg!(windows) && std::env::args().any(|a| a == "--hidden");
-            #[cfg(windows)]
+            #[cfg_attr(not(capture), allow(unused_mut))]
+            let mut to_tray = cfg!(capture) && std::env::args().any(|a| a == "--hidden");
+            #[cfg(capture)]
             {
                 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
                 // Another app may own the combination already; the in-app
                 // Capture button still works, so don't fail startup over it.
                 let hotkey = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyR);
                 if let Err(e) = app.global_shortcut().register(hotkey) {
-                    eprintln!("ShotShield: couldn't register Ctrl+Alt+R: {e}");
+                    eprintln!("ShotShield: couldn't register {SHORTCUT_LABEL}: {e}");
                 }
                 if let Err(e) = tray::setup(app) {
                     // No tray to come back from: never start hidden.
@@ -99,6 +123,15 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|_app, _event| {
+        // Closing the window to the tray only hides it; on a Mac a click on the
+        // Dock icon is how people expect to get it back.
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { .. } = _event {
+            tray::show_main(_app);
+        }
+    });
 }

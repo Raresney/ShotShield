@@ -54,7 +54,7 @@ Every category has an on/off switch in the Detection drawer, a slider sets the m
 
 Drop a screenshot (or a whole batch of them) anywhere on the window, paste one with `Ctrl+V`, or pick files. A PDF works too. Each page opens as its own image, up to the first 30, and goes through the same scan; **Save as PDF** puts the redacted pages back together. The saved PDF is made of flattened page images, so the original's hidden text layer doesn't come along.
 
-On Windows you can skip the screenshot step. Press `Ctrl+Alt+R` from any app (or the capture button), drag over the part of the screen you want, and it lands in ShotShield already scanned. The capture never touches the disk. Closing the window keeps ShotShield in the tray so the shortcut stays ready, and it can start with Windows. With **Copy captures once covered** switched on, a capture goes straight to the clipboard, redacted and ready to paste into a chat.
+You can also skip the screenshot step. On Windows and macOS, press `Ctrl+Alt+R` from any app (`Control+Option+R` on a Mac) or click the capture button, drag over the part of the screen you want, and it lands in ShotShield already scanned. The capture never touches the disk. Closing the window keeps ShotShield in the tray so the shortcut stays ready, and it can start at login. On a Mac the first capture asks for the Screen Recording permission; reopen ShotShield after granting it. Capture isn't in the Linux build yet. With **Copy captures once covered** switched on, a capture goes straight to the clipboard, redacted and ready to paste into a chat.
 
 While the scan runs, a status pill over the image names each stage. Anything sensitive is covered as soon as it's found, and the list puts the worst findings first. Click a finding, in the list or on the image, to uncover or re-cover it. Click a severity count to show only that severity. If the scan missed something, like a home address, drag a box over it; you can drag the box again to move it, or its edges to resize it. Hold the compare button to peek at the original.
 
@@ -89,7 +89,7 @@ It's an npm workspace with two halves.
 
 ## Install
 
-Grab the latest build for your platform from the [releases page](https://github.com/Raresney/ShotShield/releases/latest). Windows ships an `.exe` and an `.msi`; Linux ships an AppImage, a `.deb` and an `.rpm`; macOS ships one universal `.dmg` for Apple Silicon and Intel. Run it and you're set. The builds aren't signed with a paid certificate yet, so Windows SmartScreen may warn you on first launch (click "More info" then "Run anyway"), and macOS asks once before opening it (right-click the app, choose Open, then Open again). Screen capture, the tray and start-at-login are Windows-only for now. The app checks for updates on its own and can install them in place.
+Grab the latest build for your platform from the [releases page](https://github.com/Raresney/ShotShield/releases/latest). Windows ships an `.exe` and an `.msi`; Linux ships an AppImage, a `.deb` and an `.rpm`; macOS ships one universal `.dmg` for Apple Silicon and Intel. Run it and you're set. The builds aren't signed with a paid certificate yet, so Windows SmartScreen may warn you on first launch (click "More info" then "Run anyway"), and macOS asks once before opening it (right-click the app, choose Open, then Open again). The app checks for updates on its own and can install them in place.
 
 ## Build from source
 
