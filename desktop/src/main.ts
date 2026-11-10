@@ -9,7 +9,7 @@ import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
 import { keepToggles, locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, boxGripAt, dragBox, SEVERITY_RANK, type BoxGrip, type Region } from "./redact.ts";
 import { canvasBlob, redactedName, saveAll, saveCanvas, savePdf } from "./export.ts";
-import { loadSettings, renderSettings, saveSettings, scanConfig, type BackgroundHooks } from "./settings.ts";
+import { captureKeys, captureShortcut, loadSettings, renderSettings, saveSettings, scanConfig, type BackgroundHooks } from "./settings.ts";
 import { checkForUpdate, type PendingUpdate } from "./update.ts";
 import { isPdf, MAX_PDF_PAGES, PdfError, pdfPages } from "./pdf.ts";
 
@@ -335,7 +335,7 @@ function onSettingsChange(): void {
 }
 renderSettings(settingsBody, settings, onSettingsChange);
 
-// Set once the Windows-only Background section is wired up, so re-rendering
+// Set once the desktop-only Background section is wired up, so re-rendering
 // the drawer keeps it.
 let backgroundHooks: BackgroundHooks | null = null;
 
@@ -1572,17 +1572,25 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// ── Screen capture (Windows) ──
-// Ctrl+Alt+R (registered system-wide by the app) or the Capture button: the
-// app hides, an overlay over the frozen screen takes a region, and the crop
-// lands here as a new image.
-const canCapture = "__TAURI_INTERNALS__" in window && navigator.userAgent.includes("Windows");
+// ── Screen capture (desktop app) ──
+// Ctrl+Alt+R (Control+Option+R on a Mac, registered system-wide by the app)
+// or the Capture button: the app hides, an overlay over the frozen screen
+// takes a region, and the crop lands here as a new image.
+const canCapture = "__TAURI_INTERNALS__" in window;
 if (canCapture) {
   const captureBtn = $<HTMLButtonElement>("#captureBtn");
   const captureBtnDrop = $<HTMLButtonElement>("#captureBtnDrop");
   captureBtn.hidden = false;
   captureBtnDrop.hidden = false;
-  $<HTMLElement>("#captureHint").hidden = false;
+  captureBtn.title = `Capture a screen region (${captureShortcut()})`;
+  const hint = $<HTMLElement>("#captureHint");
+  const keys = captureKeys().map((k) => {
+    const kbd = document.createElement("kbd");
+    kbd.textContent = k;
+    return kbd;
+  });
+  hint.replaceChildren(" · ", ...keys.flatMap((k, i) => (i ? [" ", k] : [k])), " captures the screen, even from another app");
+  hint.hidden = false;
   void (async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     const { listen } = await import("@tauri-apps/api/event");
@@ -1591,6 +1599,8 @@ if (canCapture) {
       invoke("capture_start").catch((err) => {
         console.error("Capture failed", err);
         flash(captureBtnDrop, "Capture failed");
+        // A Mac without the Screen Recording permission says how to grant it.
+        notify(`Couldn't capture the screen: ${err}`);
       });
     };
     captureBtn.addEventListener("click", begin);
@@ -1620,7 +1630,7 @@ if (canCapture) {
           await invoke("set_autostart", { enabled: on });
         } catch (err) {
           console.error("Couldn't change start at login", err);
-          notify("Couldn't change start with Windows.");
+          notify("Couldn't change start at login.");
         }
       },
     };
@@ -1628,6 +1638,7 @@ if (canCapture) {
     await listen<string>("capture-failed", (e) => {
       console.error("Capture failed", e.payload);
       if (!cur) summary.textContent = `Couldn't capture the screen: ${e.payload}`;
+      else notify(`Couldn't capture the screen: ${e.payload}`);
     });
   })();
 }
