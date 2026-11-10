@@ -14,6 +14,9 @@ test("the CNP is rebuilt from the second MRZ line", () => {
   // OCR spaces and O-for-0 in the line don't matter.
   assert.deepEqual(cnpsFromMrz("ZZ123456<1ROU 95O3124F 3010150 24O12313"), ["2950312401231"]);
   assert.deepEqual(cnpsFromMrz("ZZ123456<1R0U9503124F301015024012313"), ["2950312401231"]);
+  // The document number carries no part of the CNP, so a misread there is fine.
+  assert.deepEqual(cnpsFromMrz("Z$123456<1R0U9503124F301015024012313 SS"), ["2950312401231"]);
+  assert.deepEqual(cnpsFromMrz("Z$1Z3«56 1 R0U 9503124F 3010150 24012313"), ["2950312401231"]);
   // A misread that breaks the CNP control digit gives nothing, not a wrong CNP.
   assert.deepEqual(cnpsFromMrz("ZZ123456<1ROU9503124F301015024012393"), []);
   // Another country's card carries no CNP.
