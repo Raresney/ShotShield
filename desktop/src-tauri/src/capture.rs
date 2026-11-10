@@ -132,7 +132,7 @@ pub fn start(app: AppHandle) -> Result<(), String> {
 }
 
 /// The monitor under the cursor, or the first one when the cursor can't be
-/// read (Wayland keeps it from apps).
+/// read.
 fn pick_monitor(app: &AppHandle) -> Result<Monitor, String> {
     let under_cursor = app.cursor_position().ok().and_then(|c| {
         let (x, y) = cursor_point(app, c);

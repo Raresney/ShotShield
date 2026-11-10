@@ -3,7 +3,7 @@
   "identifier": "capture",
   "description": "The screen-capture overlay: show itself once painted, nothing else",
   "windows": ["capture"],
-  "platforms": ["windows", "macOS", "linux"],
+  "platforms": ["windows", "macOS"],
   "permissions": [
     "core:default",
     "core:window:allow-show",

@@ -39,8 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Same list as the release workflow: WebKitGTK for Tauri, then PipeWire,
-      # libclang, GBM/EGL and XCB for the screen capture.
+      # The WebKitGTK stack Tauri builds against, as in the release workflow.
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
@@ -50,13 +49,7 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             libxdo-dev \
-            libssl-dev \
-            libpipewire-0.3-dev \
-            libclang-dev \
-            libgbm-dev \
-            libegl-dev \
-            libxcb1-dev \
-            libxcb-randr0-dev
+            libssl-dev
 
       - uses: actions/setup-node@v7
         with:

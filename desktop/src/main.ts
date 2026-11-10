@@ -335,7 +335,7 @@ function onSettingsChange(): void {
 }
 renderSettings(settingsBody, settings, onSettingsChange);
 
-// Set once the desktop-only Background section is wired up, so re-rendering
+// Set once the Background section (Windows and macOS) is wired up, so re-rendering
 // the drawer keeps it.
 let backgroundHooks: BackgroundHooks | null = null;
 
@@ -1572,11 +1572,11 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// ── Screen capture (desktop app) ──
+// ── Screen capture (Windows and macOS) ──
 // Ctrl+Alt+R (Control+Option+R on a Mac, registered system-wide by the app)
 // or the Capture button: the app hides, an overlay over the frozen screen
 // takes a region, and the crop lands here as a new image.
-const canCapture = "__TAURI_INTERNALS__" in window;
+const canCapture = "__TAURI_INTERNALS__" in window && /Windows|Macintosh/.test(navigator.userAgent);
 if (canCapture) {
   const captureBtn = $<HTMLButtonElement>("#captureBtn");
   const captureBtnDrop = $<HTMLButtonElement>("#captureBtnDrop");
