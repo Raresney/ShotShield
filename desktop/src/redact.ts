@@ -55,16 +55,21 @@ function boxesOverlap(a: Box, b: Box): boolean {
  * a candidate is a duplicate when a kept region of the same category already
  * covers the same spot on the image. Different categories may overlap freely
  * (a face box crossing a text field is two real findings, not one).
+ *
+ * A duplicate still lends its boxes to the kept region: two engines can read
+ * the same line to different lengths, and the cover has to reach the end of
+ * whichever read went further.
  */
 export function mergeRegions(base: Region[], extra: Region[]): Region[] {
   const merged = [...base];
   for (const r of extra) {
-    const dup = merged.some(
+    const at = merged.findIndex(
       (k) =>
         k.detection.category === r.detection.category &&
         r.boxes.some((rb) => k.boxes.some((kb) => boxesOverlap(rb, kb))),
     );
-    if (!dup) merged.push(r);
+    if (at < 0) merged.push(r);
+    else merged[at] = { ...merged[at]!, boxes: [...merged[at]!.boxes, ...r.boxes] };
   }
   return merged;
 }

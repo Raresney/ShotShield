@@ -66,6 +66,18 @@ describe("mergeRegions", () => {
     expect(merged).toHaveLength(1);
   });
 
+  it("widens a kept hit to cover what the other read saw past it", () => {
+    // One engine stopped the street line short; the other read it to the end.
+    const base = [region("address", 100, 200, 100, 20)];
+    const merged = mergeRegions(base, [region("address", 100, 200, 160, 20)]);
+    expect(merged).toHaveLength(1);
+    const right = Math.max(...merged[0]!.boxes.map((b) => b.x + b.w));
+    expect(right).toBe(260);
+    // The first box stays first, so a toggle on the region survives a rebuild.
+    expect(merged[0]!.boxes[0]).toEqual(base[0]!.boxes[0]);
+    expect(base[0]!.boxes).toHaveLength(1);
+  });
+
   it("keeps a second-pass hit the first pass missed entirely", () => {
     const base = [region("mrz", 0, 400)];
     const merged = mergeRegions(base, [region("national_id", 100, 200)]);

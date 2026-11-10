@@ -65,6 +65,14 @@ const adversarial: Record<string, string> = {
   // Form-label names: a label wall, and capitalised words that never end.
   "name labels": "Name: ".repeat(N / 4),
   "name words": "Name: " + "Ab-".repeat(N),
+  // ID name on the line under its label: label fragments on every line, and
+  // capitals that run on without ending the line.
+  "id name lines": "nume last name\nABC\n".repeat(N / 16),
+  "id name capitals": "prenume\n" + "AB ".repeat(N),
+  // Address parts: county lines, and a street whose flat parts never stop.
+  "county lines": "Jud.CJ Mun.".repeat(N / 10),
+  "street parts": "Str.A" + " bl,1".repeat(N / 4),
+  "street name run": "Str." + "A b".repeat(N),
 };
 
 for (const [name, input] of Object.entries(adversarial)) {
