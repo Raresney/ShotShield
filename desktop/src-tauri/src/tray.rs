@@ -1,5 +1,5 @@
 // The tray icon, close-to-tray and start-at-login: together they keep the
-// Ctrl+Alt+R capture one keypress away with the window closed.
+// capture shortcut one keypress away with the window closed.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -22,13 +22,20 @@ impl Default for Background {
 }
 
 pub fn setup(app: &App) -> tauri::Result<()> {
-    let capture = MenuItem::with_id(app, "capture", "Capture screen\tCtrl+Alt+R", true, None::<&str>)?;
+    // Windows lines the shortcut up on the right after a tab; other menus would
+    // print the tab, so there the shortcut lives in the tooltip.
+    let capture_text = if cfg!(windows) {
+        format!("Capture screen\t{}", crate::SHORTCUT_LABEL)
+    } else {
+        "Capture screen".to_string()
+    };
+    let capture = MenuItem::with_id(app, "capture", capture_text, true, None::<&str>)?;
     let open = MenuItem::with_id(app, "open", "Open ShotShield", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit ShotShield", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&capture, &open, &PredefinedMenuItem::separator(app)?, &quit])?;
 
     let mut tray = TrayIconBuilder::with_id("main")
-        .tooltip("ShotShield · Ctrl+Alt+R to capture")
+        .tooltip(format!("ShotShield · {} to capture", crate::SHORTCUT_LABEL))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {

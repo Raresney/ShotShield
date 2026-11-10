@@ -13,7 +13,11 @@ use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{ImageEncoder, RgbaImage};
 use serde::Deserialize;
 use tauri::ipc::Response;
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Position, Size, State, WebviewUrl, WebviewWindowBuilder};
+#[cfg(not(target_os = "macos"))]
+use tauri::PhysicalSize;
+#[cfg(target_os = "macos")]
+use tauri::{LogicalPosition, LogicalSize};
 use xcap::Monitor;
 
 const OVERLAY: &str = "capture";
@@ -72,6 +76,8 @@ pub fn start(app: AppHandle) -> Result<(), String> {
     if app.get_webview_window(OVERLAY).is_some() {
         return Ok(()); // already capturing
     }
+    #[cfg(target_os = "macos")]
+    screen_access()?;
     let main = app.get_webview_window("main");
     let was_visible = main.as_ref().is_some_and(|w| w.is_visible().unwrap_or(false));
     if let Some(w) = &main {
@@ -89,16 +95,7 @@ pub fn start(app: AppHandle) -> Result<(), String> {
     };
 
     let shot = (|| -> Result<(Monitor, RgbaImage), String> {
-        let cursor = app.cursor_position().map_err(|e| e.to_string())?;
-        let monitor = Monitor::from_point(cursor.x as i32, cursor.y as i32)
-            .or_else(|_| {
-                Monitor::all().and_then(|all| {
-                    all.into_iter()
-                        .next()
-                        .ok_or_else(|| xcap::XCapError::new("no monitor"))
-                })
-            })
-            .map_err(|e| e.to_string())?;
+        let monitor = pick_monitor(&app)?;
         let frame = monitor.capture_image().map_err(|e| e.to_string())?;
         Ok((monitor, frame))
     })();
@@ -110,8 +107,7 @@ pub fn start(app: AppHandle) -> Result<(), String> {
         }
     };
 
-    let (x, y) = (monitor.x().unwrap_or(0), monitor.y().unwrap_or(0));
-    let (w, h) = (frame.width(), frame.height());
+    let (position, size) = overlay_rect(&monitor, &frame);
     *state.frame.lock().unwrap() = Some(frame);
     *state.main_was_visible.lock().unwrap() = was_visible;
 
@@ -128,9 +124,106 @@ pub fn start(app: AppHandle) -> Result<(), String> {
             restore(&app);
             e.to_string()
         })?;
-    let _ = overlay.set_position(PhysicalPosition::new(x, y));
-    let _ = overlay.set_size(PhysicalSize::new(w, h));
+    let _ = overlay.set_position(position);
+    let _ = overlay.set_size(size);
+    #[cfg(target_os = "macos")]
+    raise_overlay(&app, overlay);
     Ok(())
+}
+
+/// The monitor under the cursor, or the first one when the cursor can't be
+/// read (Wayland keeps it from apps).
+fn pick_monitor(app: &AppHandle) -> Result<Monitor, String> {
+    let under_cursor = app.cursor_position().ok().and_then(|c| {
+        let (x, y) = cursor_point(app, c);
+        Monitor::from_point(x, y).ok()
+    });
+    match under_cursor {
+        Some(monitor) => Ok(monitor),
+        None => Monitor::all()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .next()
+            .ok_or_else(|| "no monitor found".to_string()),
+    }
+}
+
+// xcap lays monitors out in physical pixels, except on macOS where it uses
+// points, the same units the window server does.
+#[cfg(not(target_os = "macos"))]
+fn cursor_point(_app: &AppHandle, c: PhysicalPosition<f64>) -> (i32, i32) {
+    (c.x as i32, c.y as i32)
+}
+
+#[cfg(target_os = "macos")]
+fn cursor_point(app: &AppHandle, c: PhysicalPosition<f64>) -> (i32, i32) {
+    let scale = app
+        .monitor_from_point(c.x, c.y)
+        .ok()
+        .flatten()
+        .map_or(1.0, |m| m.scale_factor());
+    ((c.x / scale) as i32, (c.y / scale) as i32)
+}
+
+/// Where the overlay goes so it covers exactly the captured monitor.
+#[cfg(not(target_os = "macos"))]
+fn overlay_rect(monitor: &Monitor, frame: &RgbaImage) -> (Position, Size) {
+    let (x, y) = (monitor.x().unwrap_or(0), monitor.y().unwrap_or(0));
+    (
+        PhysicalPosition::new(x, y).into(),
+        PhysicalSize::new(frame.width(), frame.height()).into(),
+    )
+}
+
+/// On a Mac the monitor is measured in points and the frame in pixels (twice as
+/// many on a Retina screen), so the overlay is placed in points.
+#[cfg(target_os = "macos")]
+fn overlay_rect(monitor: &Monitor, frame: &RgbaImage) -> (Position, Size) {
+    let (x, y) = (monitor.x().unwrap_or(0), monitor.y().unwrap_or(0));
+    let scale = f64::from(monitor.scale_factor().unwrap_or(1.0)).max(1.0);
+    let w = monitor.width().map_or(f64::from(frame.width()) / scale, f64::from);
+    let h = monitor.height().map_or(f64::from(frame.height()) / scale, f64::from);
+    (
+        LogicalPosition::new(f64::from(x), f64::from(y)).into(),
+        LogicalSize::new(w, h).into(),
+    )
+}
+
+/// macOS hands back an image of the bare desktop unless the user has allowed
+/// screen recording, so ask first. The system prompt (or System Settings)
+/// takes it from there; the grant applies once ShotShield is reopened.
+#[cfg(target_os = "macos")]
+fn screen_access() -> Result<(), String> {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGPreflightScreenCaptureAccess() -> bool;
+        fn CGRequestScreenCaptureAccess() -> bool;
+    }
+    // SAFETY: both take no arguments and only read or prompt for the app's own permission.
+    if unsafe { CGPreflightScreenCaptureAccess() } {
+        return Ok(());
+    }
+    unsafe { CGRequestScreenCaptureAccess() };
+    Err("ShotShield needs permission to record the screen. Allow it in System Settings, \
+         Privacy & Security, Screen Recording, then quit and reopen ShotShield."
+        .into())
+}
+
+/// Lift the overlay above the menu bar and the Dock, where the system's own
+/// screenshot tool draws. An always-on-top window still sits under both, and
+/// whatever they hide couldn't be selected.
+#[cfg(target_os = "macos")]
+fn raise_overlay(app: &AppHandle, overlay: tauri::WebviewWindow) {
+    // AppKit windows may only be touched on the main thread.
+    let _ = app.run_on_main_thread(move || {
+        let Ok(ptr) = overlay.ns_window() else { return };
+        const SCREEN_SAVER_LEVEL: isize = 1000;
+        // SAFETY: ns_window is the overlay's live NSWindow, and this runs on the main thread.
+        unsafe {
+            let window = &*(ptr as *mut objc2::runtime::AnyObject);
+            let _: () = objc2::msg_send![window, setLevel: SCREEN_SAVER_LEVEL];
+        }
+    });
 }
 
 fn finish(app: &AppHandle, delivered: bool) {

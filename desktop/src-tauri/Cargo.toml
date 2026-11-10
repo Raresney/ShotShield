@@ -29,15 +29,15 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
-
-[target."cfg(windows)".dependencies]
-# The tray icon and start-at-login keep Ctrl+Alt+R available with the window
-# closed. Windows-only like capture, which is what they're for.
+# The tray icon and start-at-login keep the capture shortcut available with the
+# window closed.
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
-image = { version = "0.25", default-features = false, features = ["png"] }
 tauri-plugin-global-shortcut = "2"
+image = { version = "0.25", default-features = false, features = ["png"] }
 xcap = { version = "0.9", default-features = false }
+
+[target."cfg(windows)".dependencies]
 # The system OCR (Windows.Media.Ocr), read alongside Tesseract.
 windows = { version = "0.62", features = [
   "Foundation",
@@ -48,3 +48,6 @@ windows = { version = "0.62", features = [
   "Storage_Streams",
 ] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# Raises the capture overlay above the menu bar and the Dock.
+objc2 = "0.6"
