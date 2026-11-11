@@ -43,6 +43,7 @@ The engine reads the text in an image with OCR, then runs it through a table of 
 - Bitcoin (checksum-verified) and Ethereum wallet addresses
 - Public IP addresses, which are listed but left visible unless you cover them
 - Faces, from a small detector that runs inside the app
+- QR codes and 2D barcodes (Aztec, Data Matrix, PDF417, MaxiCode), read with zxing-cpp compiled to wasm. Each is covered and listed by what it holds without showing it: a 2FA secret, a Wi-Fi login or a wallet ranks above a boarding pass, a payment QR or a contact card, which rank above a plain link. Ordinary 1D product barcodes are left alone
 
 The OCR reads English and Romanian. Both models ship with the app, so nothing gets downloaded. On Windows and macOS the image is also read by the OCR built into the system (Windows.Media.Ocr, or Vision on a Mac), and the findings of both reads are merged; it often keeps lines Tesseract loses, like an ID's CNP printed over a tinted background. The matchers expect OCR to slip (an underscore read as a space in the middle of a key, a monospace zero read as `@` or `O`) and still catch the value. Sideways photos are straightened before the scan.
 
@@ -75,7 +76,7 @@ A few keys speed up the loop:
 
 ## Privacy
 
-The image stays on your computer. The OCR (tesseract.js), the face model (face-api), the PDF renderer (pdf.js) and even the fonts are bundled into the app and run offline, so there's no account to create and nowhere for the picture to be sent. The system OCR engine the app also asks, on Windows and macOS, is part of the system and runs on the device too. The build also ships a Content Security Policy that blocks outbound requests, which stops a stray dependency from phoning home. Saving goes through the system dialog, and the app can only write the one file you pick there.
+The image stays on your computer. The OCR (tesseract.js), the face model (face-api), the code reader (zxing-wasm), the PDF renderer (pdf.js) and even the fonts are bundled into the app and run offline, so there's no account to create and nowhere for the picture to be sent. The system OCR engine the app also asks, on Windows and macOS, is part of the system and runs on the device too. The build also ships a Content Security Policy that blocks outbound requests, which stops a stray dependency from phoning home. Saving goes through the system dialog, and the app can only write the one file you pick there.
 
 The export helps too, in a quieter way: the file you save is redrawn from the canvas, pixel by pixel, so camera metadata (EXIF tags, GPS coordinates, the device model) never makes it into the copy you share. And because the redaction is painted into those pixels rather than layered on top, there's nothing underneath to recover.
 
