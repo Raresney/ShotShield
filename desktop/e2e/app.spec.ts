@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { EMAIL, IBAN, screenshotPng, settledFilms, textPdf } from "./fixtures.ts";
+import { EMAIL, IBAN, qrPng, screenshotPng, settledFilms, textPdf } from "./fixtures.ts";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -42,6 +42,17 @@ test("an image is read, covered, toggled and saved", async ({ page }) => {
   expect(file.suggestedFilename()).toBe("invoice-redacted.png");
   const bytes = await readFile((await file.path())!);
   expect([...bytes.subarray(1, 4)].map((b) => String.fromCharCode(b)).join("")).toBe("PNG");
+});
+
+test("a QR code is covered and named by what it holds", async ({ page }) => {
+  // A made-up network: the QR in a "join our Wi-Fi" screenshot carries its password.
+  const png = await qrPng(page, "Guest network", "WIFI:T:WPA;S:Guest;P:not-a-real-pass;;");
+  await page.locator("#file").setInputFiles({ name: "wifi.png", mimeType: "image/png", buffer: png });
+
+  const code = page.locator("#results .hit", { hasText: "QR code · Wi-Fi login" });
+  await expect(code).toHaveAttribute("aria-pressed", "true", { timeout: 80_000 });
+  // The list names the payload's kind, never the payload.
+  await expect(page.locator("#results")).not.toContainText("not-a-real-pass");
 });
 
 test("an ID card's CNP is covered through its MRZ even when misread", async ({ page }) => {

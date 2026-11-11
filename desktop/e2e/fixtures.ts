@@ -1,4 +1,12 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import type { Page } from "@playwright/test";
+import { prepareZXingModule, writeBarcode } from "zxing-wasm/writer";
+
+const require = createRequire(import.meta.url);
+prepareZXingModule({
+  overrides: { wasmBinary: readFileSync(require.resolve("zxing-wasm/writer/zxing_writer.wasm")).buffer as ArrayBuffer },
+});
 
 // Fake data only: an example.com address and the IBAN from the ECBS examples.
 export const EMAIL = "maria.popescu@example.com";
@@ -68,4 +76,31 @@ export async function settledFilms(page: Page, count: number): Promise<string[]>
     { timeout: 80_000 },
   );
   return (await films.allTextContents()).map((t) => t.trim());
+}
+
+/** A screenshot with a line of text and a QR code holding `payload` beside it. */
+export async function qrPng(page: Page, caption: string, payload: string): Promise<Buffer> {
+  const { svg, error } = await writeBarcode(payload, { format: "QRCode" });
+  if (error) throw new Error(error);
+  const dataUrl = await page.evaluate(
+    async ({ caption, svg }) => {
+      const img = new Image();
+      img.src = `data:image/svg+xml;base64,${btoa(svg)}`;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = 900;
+      c.height = 420;
+      const g = c.getContext("2d")!;
+      g.fillStyle = "#ffffff";
+      g.fillRect(0, 0, c.width, c.height);
+      g.fillStyle = "#111111";
+      g.font = "28px Arial, sans-serif";
+      g.fillText(caption, 40, 70);
+      g.imageSmoothingEnabled = false;
+      g.drawImage(img, 560, 100, 280, 280);
+      return c.toDataURL("image/png");
+    },
+    { caption, svg },
+  );
+  return Buffer.from(dataUrl.split(",")[1]!, "base64");
 }

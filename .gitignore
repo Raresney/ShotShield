@@ -28,6 +28,10 @@ dist-ssr/
 # Worker, fonts, CMaps and wasm decoders are copied from node_modules on predev/prebuild.
 /desktop/public/vendor/pdfjs/
 
+# ───── zxing-wasm reader (desktop) ─────
+# The code reader's wasm is copied from node_modules on predev/prebuild.
+/desktop/public/vendor/zxing/
+
 # ───── Flutter (mobile) ─────
 .dart_tool/
 .flutter-plugins

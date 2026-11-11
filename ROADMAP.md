@@ -8,6 +8,7 @@ Rough order, not dates. Built in the open, so this will move around.
 - [x] Screen capture with `Ctrl+Alt+R`, tray and start-at-login on Windows, macOS and Linux
 - [x] Romanian IDs read off a phone photo, CNP included, with names and addresses boxed line by line
 - [x] The system OCR engine (Windows, and Vision on macOS) read beside Tesseract
+- [x] QR codes and 2D barcodes covered and rated by what they hold
 
 ### Next
 - [ ] Sharper OCR on hard photos
@@ -15,4 +16,3 @@ Rough order, not dates. Built in the open, so this will move around.
 
 ### Later
 - [ ] Phone app with a share-sheet entry point ("Share to ShotShield")
-- [ ] QR codes and barcodes that carry personal data

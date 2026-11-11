@@ -7,15 +7,17 @@ import type { Category, CustomRule, ScanConfig } from "@shotshield/core";
 import type { CoverStyle } from "./redact.ts";
 
 // The categories the user can switch, grouped the way people think about them.
-// Faces aren't a core scan category (they come from the face model), so they get
-// their own switch inside the Identity group.
-const GROUPS: { title: string; items: { cat: Category | "face"; label: string }[] }[] = [
+// Faces and codes aren't found by the text scan (they come from the face model
+// and the code reader), so they get switches of their own.
+type Visual = "face" | "code";
+const GROUPS: { title: string; items: { cat: Category; label: string }[] }[] = [
   {
     title: "Secrets",
     items: [
       { cat: "api_key", label: "API keys & tokens" },
       { cat: "credential", label: "Passwords & credentials" },
       { cat: "jwt", label: "JSON Web Tokens" },
+      { cat: "code", label: "QR codes & 2D barcodes" },
     ],
   },
   {
@@ -55,6 +57,8 @@ export interface Settings {
   enabled: Partial<Record<Category, boolean>>;
   /** Faces are detected outside the core scan, so they're tracked separately. */
   faces: boolean;
+  /** QR codes and 2D barcodes, found by the code reader. */
+  codes: boolean;
   /** 0..1 floor; detections below it are dropped. */
   minConfidence: number;
   /** How a covered region is drawn on the image. */
@@ -79,10 +83,14 @@ export interface UserRule {
 
 const STORAGE_KEY = "shotshield.settings";
 
+function isVisual(cat: Category): cat is Visual {
+  return cat === "face" || cat === "code";
+}
+
 function defaults(): Settings {
   const enabled: Partial<Record<Category, boolean>> = {};
-  for (const g of GROUPS) for (const { cat } of g.items) if (cat !== "face") enabled[cat] = true;
-  return { enabled, faces: true, minConfidence: 0, cover: "solid", tray: true, copyCaptures: false, allow: [], rules: [] };
+  for (const g of GROUPS) for (const { cat } of g.items) if (!isVisual(cat)) enabled[cat] = true;
+  return { enabled, faces: true, codes: true, minConfidence: 0, cover: "solid", tray: true, copyCaptures: false, allow: [], rules: [] };
 }
 
 // Merge whatever was saved over the defaults, so a category added in a later
@@ -96,6 +104,7 @@ export function loadSettings(): Settings {
     return {
       enabled: { ...base.enabled, ...(saved.enabled ?? {}) },
       faces: saved.faces ?? base.faces,
+      codes: saved.codes ?? base.codes,
       minConfidence:
         typeof saved.minConfidence === "number" ? saved.minConfidence : base.minConfidence,
       cover: saved.cover === "mosaic" ? "mosaic" : "solid",
@@ -191,10 +200,11 @@ export function renderSettings(
   for (const g of GROUPS) {
     const section = group(g.title);
     for (const { cat, label } of g.items) {
-      const on = cat === "face" ? s.faces : (s.enabled[cat] ?? true);
+      const on = cat === "face" ? s.faces : cat === "code" ? s.codes : (s.enabled[cat] ?? true);
       section.append(
         toggle(label, on, (next) => {
           if (cat === "face") s.faces = next;
+          else if (cat === "code") s.codes = next;
           else s.enabled[cat] = next;
           commit();
         }),
