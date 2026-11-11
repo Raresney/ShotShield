@@ -44,6 +44,15 @@ test("an image is read, covered, toggled and saved", async ({ page }) => {
   expect([...bytes.subarray(1, 4)].map((b) => String.fromCharCode(b)).join("")).toBe("PNG");
 });
 
+test("a name in a chat is covered without a label in front of it", async ({ page }) => {
+  // Made-up people, as a chat app lays them out.
+  const png = await screenshotPng(page, ["Ana Popescu", "See you at the station at five", "Mihai Ionescu", "Sure, on my way"]);
+  await page.locator("#file").setInputFiles({ name: "chat.png", mimeType: "image/png", buffer: png });
+
+  await expect(page.locator("#summary")).toHaveText("2 of 2 covered", { timeout: 80_000 });
+  await expect(page.locator("#results .hit", { hasText: "Name" })).toHaveCount(2);
+});
+
 test("a QR code is covered and named by what it holds", async ({ page }) => {
   // A made-up network: the QR in a "join our Wi-Fi" screenshot carries its password.
   const png = await qrPng(page, "Guest network", "WIFI:T:WPA;S:Guest;P:not-a-real-pass;;");

@@ -4,6 +4,7 @@
 import type { CustomRule, Detection, ScanConfig, Severity } from "./types.ts";
 import { BUILTIN_PATTERNS } from "./patterns.ts";
 import { cnpsFromMrz, findApprox } from "./cardcnp.ts";
+import { findNames } from "./names.ts";
 
 interface CompiledRule {
   category: Detection["category"];
@@ -129,6 +130,26 @@ export function scan(text: string, config?: ScanConfig): Detection[] {
           redactByDefault: true,
         });
       }
+    }
+  }
+
+  // Names with no label in front: a known given name beside a family name.
+  // Rated below the labelled ones, so a label's own hit wins where both see
+  // the same name and the sensitivity slider can drop these first.
+  if (config?.enabled?.name !== false) {
+    for (const { start, end, confidence } of findNames(text)) {
+      const raw = text.slice(start, end);
+      if (confidence < minConfidence || allowed(raw)) continue;
+      found.push({
+        category: "name",
+        label: "Name",
+        severity: "medium",
+        start,
+        end,
+        text: raw,
+        confidence,
+        redactByDefault: true,
+      });
     }
   }
 
