@@ -38,6 +38,7 @@ The engine reads the text in an image with OCR, then runs it through a table of 
 - Romanian ID cards: the printed "SERIA … NR …" line and the machine-readable zone along the bottom
 - Passport and driving licence numbers behind their label (`Nr. pașaport`, `Passport No.`, `Nr. permis`), and Romanian number plates (`CJ 12 ABC`, `B 123 XYZ`) checked against the real county codes
 - People's names behind a label: the ID card's Nume/Nom/Last name, or a form's `Name:`, `Cardholder:`, `Titular cont:`, `Beneficiar:` and the like
+- Names with no label at all, as a chat or an email shows them: a known Romanian or English given name next to a family name on the same line (`Ana Popescu`, `POPESCU ANDREI`, `John Smith`). Given names that are also words (May, Grace, Jordan) need a family name the lists know, and streets or schools named after someone are left alone. These rank below labelled names, so the sensitivity slider drops them first
 - Emails, and phone numbers in international or Romanian form
 - Postal addresses: a street with its number (`Str. Mihai Eminescu nr. 12, bl. A3, ap. 14`, `221 Baker Street`) or the line after an address label such as `Domiciliu:` or `Address:`
 - Bitcoin (checksum-verified) and Ethereum wallet addresses

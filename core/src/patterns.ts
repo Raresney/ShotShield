@@ -506,8 +506,8 @@ export const BUILTIN_PATTERNS: PatternSpec[] = [
   // The holder's name behind a buletin's trilingual Nume/Nom/Last-name labels.
   // The lookbehind matches the label but keeps it out of the hit, so only the
   // uppercase value (1 to 3 words) is boxed. Best-effort: it leans on OCR keeping
-  // the label next to its value. A name with no label at all needs NER, not a
-  // regex, so it's out of scope.
+  // the label next to its value. A name with no label at all is found from
+  // lists of given and family names instead (see names.ts).
   { category: "name", label: "Name", severity: "high",
     source:
       "(?<=\\b(?:NUME|Nume|PRENUME|Prenume|NOM|Nom|PR[EÉ]NOM|Pr[eé]nom|LAST NAME|Last name|FIRST NAME|First name|SURNAME|Surname)\\b(?:[ \\t:/]{0,3}|[ \\t:/]{0,2}\\n[ \\t]{0,2}))[A-ZĂÂÎȘȚŞŢ]{2,}(?:[ -][A-ZĂÂÎȘȚŞŢ]{2,}){0,2}",

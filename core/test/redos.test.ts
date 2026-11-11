@@ -25,6 +25,10 @@ function timed(text: string): number {
 
 const N = 20_000;
 const adversarial: Record<string, string> = {
+  // Names: a long run of given names, every one a window to weigh, and a word
+  // glued from hyphens and apostrophes for the tokenizer.
+  "name run": "Ana Maria ".repeat(N),
+  "name hyphen glue": "Ana" + "-Maria'Ion".repeat(N),
   // Email: local-part, then a long dotted tail that never resolves to a TLD.
   "email dotted tail": "a".repeat(N) + "@" + "a.".repeat(N),
   "email trailing dots": "user@" + ".".repeat(N),
