@@ -1,6 +1,6 @@
 // Copy vendored runtime assets out of node_modules into public/ so Vite serves
-// them locally. OCR (tesseract.js) and face detection (face-api.js) both run
-// fully offline, with nothing fetched at runtime. Runs on predev/prebuild.
+// them locally. OCR (tesseract.js), face detection (face-api.js) and code
+// reading (zxing-wasm) all run fully offline, with nothing fetched at runtime. Runs on predev/prebuild.
 
 import { cpSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -30,6 +30,12 @@ const modelDir = join(dirname(require.resolve("@vladmandic/face-api/package.json
 for (const f of ["tiny_face_detector_model-weights_manifest.json", "tiny_face_detector_model.bin"]) {
   cpSync(join(modelDir, f), join(faces, f));
 }
+
+// ── zxing-wasm (QR codes and 2D barcodes) ──
+// The reader-only build: decoding without the encoder.
+const zxing = join(vendor, "zxing");
+mkdirSync(zxing, { recursive: true });
+cpSync(require.resolve("zxing-wasm/reader/zxing_reader.wasm"), join(zxing, "zxing_reader.wasm"));
 
 // ── pdf.js (PDF pages) ──
 // The worker that parses the file, plus what it loads on demand: CMaps and the

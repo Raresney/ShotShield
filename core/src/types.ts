@@ -21,6 +21,7 @@ export type Category =
   | "license_plate"
   | "address"
   | "face"
+  | "code"
   | "custom";
 
 export type Severity = "critical" | "high" | "medium" | "low";

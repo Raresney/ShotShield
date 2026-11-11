@@ -26,7 +26,8 @@
     "@vladmandic/face-api": "^1.7.15",
     "pdfjs-dist": "^6.4.299",
     "tesseract.js": "^7.0.0",
-    "tesseract.js-core": "^7.0.0"
+    "tesseract.js-core": "^7.0.0",
+    "zxing-wasm": "^3.1.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

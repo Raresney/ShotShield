@@ -5,6 +5,7 @@ import "./styles.css";
 import { scan, type Detection, type Severity } from "@shotshield/core";
 import { ocrNative } from "./nativeocr.ts";
 import { ocr, ocrAutoOrient, ocrConcurrency, ocrSecondLook, type Box, type OcrResult, type OcrWord, type ProgressFn } from "./ocr.ts";
+import { codeKind, codeLabel, detectCodes, type CodeHit } from "./codes.ts";
 import type { FaceHit } from "./faces.ts";
 import { orientedCanvas, loadImageEl } from "./image.ts";
 import { keepToggles, locate, mergeRegions, needsSecondLook, paint, redactText, regionAt, boxGripAt, dragBox, SEVERITY_RANK, type BoxGrip, type Region } from "./redact.ts";
@@ -398,6 +399,8 @@ interface Doc {
    * change re-derives findings without reading the image again. */
   ocr: { text: string; words: OcrWord[] }[];
   faces: Region[];
+  /** QR codes and 2D barcodes, cached like the faces. */
+  codes: Region[];
   regions: Region[];
   /** Hand-drawn redaction rectangles, in image-pixel space. */
   manual: Box[];
@@ -480,7 +483,7 @@ function refreshThumb(doc: Doc): void {
   doc.thumb = thumbOf(doc === cur && doc.status === "done" ? canvas : renderDoc(doc));
 }
 
-// Build a doc's redaction list from its cached OCR and faces under the current
+// Build a doc's redaction list from its cached OCR, faces and codes under the current
 // settings. Runs after a scan finishes and whenever a setting changes.
 function computeRegions(doc: Doc): void {
   // Union the passes: the second look mostly re-reads what the first saw, so
@@ -493,7 +496,9 @@ function computeRegions(doc: Doc): void {
   }
   // Keep what the user covered or uncovered: a cover-style switch must not
   // bring a hand-covered finding back into view.
-  doc.regions = [...keepToggles(doc.regions, textRegions), ...(settings.faces ? doc.faces : [])];
+  doc.regions = [...keepToggles(doc.regions, textRegions), ...(settings.faces ? doc.faces : []),
+    ...(settings.codes ? doc.codes : []),
+  ];
 }
 
 function setProgress(doc: Doc, fraction: number | null, label: string): void {
@@ -609,9 +614,21 @@ async function analyze(doc: Doc): Promise<void> {
   }
   if (!alive()) return;
 
+  // Codes are read on every page, a PDF's too: a boarding pass or a ticket
+  // draws its code as vectors, which no text layer carries.
+  let codes: Region[] = [];
+  setProgress(doc, null, "Looking for codes");
+  try {
+    codes = (await detectCodes(working)).map(codeRegion);
+  } catch (err) {
+    console.error("Code reading failed", err);
+  }
+  if (!alive()) return;
+
   doc.img = working;
   doc.ocr = passes;
   doc.faces = faces;
+  doc.codes = codes;
   computeRegions(doc);
   doc.status = "done";
   refreshThumb(doc);
@@ -714,6 +731,7 @@ async function addImages(files: File[]): Promise<Doc[]> {
       img: null,
       ocr: [],
       faces: [],
+      codes: [],
       regions: [],
       manual: [],
       undo: [],
@@ -916,6 +934,26 @@ function faceRegion(hit: FaceHit): Region {
   };
 }
 
+// Wrap a QR code or 2D barcode the same way, rated by what it holds. The
+// findings list names the kind of payload, never the payload itself.
+function codeRegion(hit: CodeHit): Region {
+  const { kind, severity } = codeKind(hit.text);
+  return {
+    detection: {
+      category: "code",
+      label: `${codeLabel(hit.format)} · ${kind}`,
+      severity,
+      start: 0,
+      end: 0,
+      text: hit.text,
+      confidence: 1,
+      redactByDefault: true,
+    },
+    boxes: [hit.box],
+    hidden: true,
+  };
+}
+
 // Recompute every scanned doc after a settings change; repaint the one on screen.
 function recomputeRegions(): void {
   for (const doc of docs) if (doc.status === "done") computeRegions(doc);
@@ -996,9 +1034,10 @@ function regionRow(region: Region, index: number, position: number): HTMLElement
   const el = hitRow({
     sev: d.severity,
     label: d.label,
-    // A face has no text to mask, so show its size instead.
+    // A face has no text to mask, so show its size instead. A code's payload
+    // isn't shown either: even masked, a link or a Wi-Fi name can give it away.
     value:
-      d.category === "face"
+      d.category === "face" || d.category === "code"
         ? `${Math.round(region.boxes[0]?.w ?? 0)} × ${Math.round(region.boxes[0]?.h ?? 0)} px`
         : mask(d.text),
     confidence: d.confidence,
@@ -1008,7 +1047,8 @@ function regionRow(region: Region, index: number, position: number): HTMLElement
   });
   el.title = region.hidden ? "Click to uncover" : "Click to cover";
   el.addEventListener("click", () => toggle(index));
-  if (d.category !== "face") el.addEventListener("contextmenu", (e) => offerAllow(e, d.text));
+  // The allow list matches text the scan reads, which a face or a code isn't.
+  if (d.category !== "face" && d.category !== "code") el.addEventListener("contextmenu", (e) => offerAllow(e, d.text));
   el.addEventListener("mouseenter", () => setHover(region.boxes));
   el.addEventListener("mouseleave", () => setHover(null));
   // Keyboard users get the same region outline when they tab onto the row.
@@ -1478,6 +1518,7 @@ rotateBtn.addEventListener("click", async () => {
     img: null,
     ocr: [],
     faces: [],
+    codes: [],
     regions: [],
     manual: [],
     undo: [],

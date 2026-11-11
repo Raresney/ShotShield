@@ -5,9 +5,12 @@ import { scan } from "@shotshield/core";
 beforeEach(() => localStorage.clear());
 
 describe("loadSettings", () => {
-  it("defaults to everything enabled, faces on, no confidence floor", () => {
+  it("defaults to everything enabled, faces and codes on, no confidence floor", () => {
     const s = loadSettings();
     expect(s.faces).toBe(true);
+    expect(s.codes).toBe(true);
+    // Codes have their own switch, not a core scan category.
+    expect(s.enabled.code).toBeUndefined();
     expect(s.minConfidence).toBe(0);
     expect(s.cover).toBe("solid");
     expect(s.enabled.email).toBe(true);
@@ -23,6 +26,7 @@ describe("loadSettings", () => {
     expect(s.enabled.email).toBe(false); // saved
     expect(s.enabled.iban).toBe(true); // not in saved -> default on
     expect(s.faces).toBe(false);
+    expect(s.codes).toBe(true); // settings saved before codes existed
     expect(s.minConfidence).toBe(0.5);
   });
 
